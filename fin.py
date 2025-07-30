@@ -48,12 +48,14 @@ EMBEDDING_MODELS = {
     "OpenAI": {
         "class": OpenAIEmbeddings,
         "params": {},
-        "requires_api_key": True
+        "requires_api_key": True,
+        "display_name": "OpenAI Text-Embedding-3"
     },
     "HuggingFace Instructor": {
         "class": HuggingFaceInstructEmbeddings,
         "params": {"model_name": "hku-nlp/instructor-xl"},
-        "requires_api_key": False
+        "requires_api_key": False,
+        "display_name": "HF Instructor XL"
     },
     "HuggingFace Sentence Transformers": {
         "class": HuggingFaceEmbeddings,
@@ -61,7 +63,8 @@ EMBEDDING_MODELS = {
             "model_name": "sentence-transformers/all-MiniLM-L6-v2",
             "model_kwargs": {"device": "cpu"}
         },
-        "requires_api_key": False
+        "requires_api_key": False,
+        "display_name": "HF MiniLM-L6-v2"
     },
     "HuggingFace BGE Small": {
         "class": HuggingFaceEmbeddings,
@@ -69,7 +72,8 @@ EMBEDDING_MODELS = {
             "model_name": "BAAI/bge-small-en-v1.5",
             "model_kwargs": {"device": "cpu"}
         },
-        "requires_api_key": False
+        "requires_api_key": False,
+        "display_name": "HF BGE Small v1.5"
     },
     "HuggingFace Multilingual": {
         "class": HuggingFaceEmbeddings,
@@ -77,7 +81,8 @@ EMBEDDING_MODELS = {
             "model_name": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
             "model_kwargs": {"device": "cpu"}
         },
-        "requires_api_key": False
+        "requires_api_key": False,
+        "display_name": "HF Multilingual MiniLM"
     }
 }
 
@@ -85,17 +90,20 @@ LLM_MODELS = {
     "Gemini 2.0 Flash": {
         "model_name": "gemini-2.0-flash-exp",
         "api_key_env": "GOOGLE_API_KEY",
-        "description": "Google Gemini Pro - Modèle puissant et rapide"
+        "description": "Google Gemini Pro - Modèle puissant et rapide",
+        "display_name": "Gemini 2.0 Flash"
     },
     "Gemini Pro 1.5": {
-        "model_name": "gemini-1.5-pro",
+        "model_name": "gemini-1.5-pro-latest",
         "api_key_env": "GOOGLE_API_KEY",
-        "description": "Google Gemini 1.5 Pro - Modèle le plus avancé"
+        "description": "Google Gemini 1.5 Pro - Modèle le plus avancé",
+        "display_name": "Gemini 1.5 Pro"
     },
     "Gemini Pro": {
         "model_name": "gemini-pro",
         "api_key_env": "GOOGLE_API_KEY",
-        "description": "Google Gemini Pro - Modèle standard performant"
+        "description": "Google Gemini Pro - Modèle standard performant",
+        "display_name": "Gemini Pro"
     }
 }
 
@@ -159,8 +167,8 @@ class VectorStoreManager:
     
     def save_vectorstore(self, vectorstore: FAISS, vectorstore_id: str, 
                         documents: List[LangchainDocument], embedding_model: str,
-                        chunk_params: Dict, custom_name: str = None) -> bool:
-        """Sauvegarde le vector store en répertoire avec métadonnées"""
+                        chunk_params: Dict, llm_model: str = None, custom_name: str = None) -> bool:
+        """Sauvegarde le vector store en répertoire avec métadonnées détaillées"""
         try:
             vectorstore_path = self.get_vectorstore_path(vectorstore_id)
             
@@ -174,41 +182,105 @@ class VectorStoreManager:
             # Sauvegarder le vector store
             vectorstore.save_local(str(vectorstore_path))
             
+            # Analyser les documents pour extraire les informations détaillées
+            files_info = {}
+            urls_info = []
+            total_chunks = 0
+            
+            for doc in documents:
+                source = doc.metadata.get('source', 'Unknown')
+                doc_type = doc.metadata.get('type', 'unknown')
+                
+                if doc_type == 'web':
+                    # Pour les URLs
+                    url_info = {
+                        'url': source,
+                        'title': doc.metadata.get('title', 'Sans titre'),
+                        'chunks': doc.metadata.get('total_chunks', 1),
+                        'content_size': doc.metadata.get('size', 0),
+                        'status_code': doc.metadata.get('status_code', 'unknown'),
+                        'content_type': doc.metadata.get('content_type', 'unknown')
+                    }
+                    
+                    # Vérifier si cette URL n'est pas déjà ajoutée
+                    existing_url = next((u for u in urls_info if u['url'] == source), None)
+                    if not existing_url:
+                        urls_info.append(url_info)
+                    
+                else:
+                    # Pour les fichiers
+                    if source not in files_info:
+                        files_info[source] = {
+                            'filename': source,
+                            'type': doc_type,
+                            'pages': set() if doc_type == 'pdf' else None,
+                            'sheets': set() if doc_type == 'excel' else None,
+                            'total_chunks': 0,
+                            'total_size': 0,
+                            'word_count': 0
+                        }
+                    
+                    # Mettre à jour les informations
+                    files_info[source]['total_chunks'] += 1
+                    files_info[source]['total_size'] += doc.metadata.get('size', 0)
+                    
+                    if doc_type == 'pdf' and 'page_number' in doc.metadata:
+                        files_info[source]['pages'].add(doc.metadata['page_number'])
+                    elif doc_type == 'excel' and 'sheet_name' in doc.metadata:
+                        files_info[source]['sheets'].add(doc.metadata['sheet_name'])
+                    elif doc_type == 'docx' and 'word_count' in doc.metadata:
+                        files_info[source]['word_count'] = doc.metadata['word_count']
+                
+                total_chunks += 1
+            
+            # Convertir les sets en listes pour la sérialisation JSON
+            for file_info in files_info.values():
+                if file_info['pages'] is not None:
+                    file_info['pages'] = sorted(list(file_info['pages']))
+                if file_info['sheets'] is not None:
+                    file_info['sheets'] = sorted(list(file_info['sheets']))
+            
             # Générer un nom personnalisé si non fourni
             if not custom_name:
-                sources = list(set([doc.metadata.get('source', 'Unknown')[:20] for doc in documents[:3]]))
-                custom_name = f"VS_{len(sources)}docs_{datetime.now().strftime('%Y%m%d_%H%M')}"
+                file_count = len(files_info)
+                url_count = len(urls_info)
+                if file_count > 0 and url_count > 0:
+                    custom_name = f"Mix_{file_count}fichiers_{url_count}urls_{datetime.now().strftime('%m%d_%H%M')}"
+                elif file_count > 0:
+                    if file_count == 1:
+                        filename = list(files_info.keys())[0]
+                        # Extraire le nom sans extension
+                        name_without_ext = Path(filename).stem
+                        custom_name = f"{name_without_ext}_{datetime.now().strftime('%m%d_%H%M')}"
+                    else:
+                        custom_name = f"{file_count}fichiers_{datetime.now().strftime('%m%d_%H%M')}"
+                elif url_count > 0:
+                    custom_name = f"{url_count}urls_{datetime.now().strftime('%m%d_%H%M')}"
+                else:
+                    custom_name = f"VS_{datetime.now().strftime('%Y%m%d_%H%M')}"
             
-            # Créer les métadonnées
+            # Créer les métadonnées complètes
             metadata = {
                 'vectorstore_id': vectorstore_id,
                 'custom_name': custom_name,
                 'created_at': datetime.now().isoformat(),
                 'embedding_model': embedding_model,
+                'embedding_model_display': EMBEDDING_MODELS.get(embedding_model, {}).get('display_name', embedding_model),
+                'llm_model': llm_model,
+                'llm_model_display': LLM_MODELS.get(llm_model, {}).get('display_name', llm_model) if llm_model else None,
                 'chunk_params': chunk_params,
-                'document_count': len(documents),
+                'document_count': len(set([doc.metadata.get('source') for doc in documents])),
+                'total_chunks': total_chunks,
                 'vector_count': vectorstore.index.ntotal,
-                'documents_info': []
+                'files_info': list(files_info.values()),
+                'urls_info': urls_info,
+                'processing_stats': {
+                    'total_files': len(files_info),
+                    'total_urls': len(urls_info),
+                    'total_size_mb': round(sum([f['total_size'] for f in files_info.values()]) / (1024 * 1024), 2),
+                    'file_types': list(set([f['type'] for f in files_info.values()]))
+                }
             }
-            
-            # Ajouter les informations des documents
-            doc_sources = {}
-            for doc in documents:
-                source = doc.metadata.get('source', 'Unknown')
-                doc_type = doc.metadata.get('type', 'unknown')
-                
-                if source not in doc_sources:
-                    doc_sources[source] = {
-                        'source': source,
-                        'type': doc_type,
-                        'chunks': 0,
-                        'total_size': 0
-                    }
-                
-                doc_sources[source]['chunks'] += 1
-                doc_sources[source]['total_size'] += len(doc.page_content)
-            
-            metadata['documents_info'] = list(doc_sources.values())
             
             # Sauvegarder les métadonnées
             self.save_vectorstore_metadata(vectorstore_id, metadata)
@@ -253,7 +325,7 @@ class VectorStoreManager:
                 metadata = self.load_vectorstore_metadata(vectorstore_id)
                 
                 if metadata:
-                    # Ajouter des informations sur la taille
+                    # Ajouter des informations sur la taille de stockage
                     total_size = sum(path.stat().st_size for path in path.rglob('*') if path.is_file())
                     metadata['storage_size_mb'] = round(total_size / (1024 * 1024), 2)
                     metadata['path'] = str(path)
@@ -612,94 +684,533 @@ class DocumentProcessor:
         self.stats['processing_time'] = round(time.time() - start_time, 2)
         self.processed_docs = all_documents
         
-        logger.info(f"Traitement terminé: {len(all_documents)} documents traités en {self.stats['processing_time']}s")
-        
+        logger.info(f"Traitement terminé: {self.stats['successful_docs']}/{self.stats['total_docs']} sources traitées")
         return all_documents
 
-class OptimizedTextSplitter:
-    """Diviseur de texte optimisé avec préservation du contexte"""
+def get_text_chunks(documents: List[LangchainDocument], chunk_size: int = 1000, 
+                   chunk_overlap: int = 200) -> List[LangchainDocument]:
+    """Divise les documents en chunks avec préservation des métadonnées"""
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        length_function=len,
+        separators=["\n\n", "\n", " ", ""]
+    )
     
-    def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200, processor: DocumentProcessor = None):
-        self.splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            length_function=len,
-            separators=["\n\n", "\n", " ", ""]
+    all_chunks = []
+    for doc in documents:
+        try:
+            # Diviser le document en chunks
+            doc_chunks = text_splitter.split_text(doc.page_content)
+            
+            # Créer des documents LangChain avec métadonnées enrichies
+            for i, chunk_text in enumerate(doc_chunks):
+                # Copier les métadonnées originales
+                chunk_metadata = doc.metadata.copy()
+                
+                # Ajouter des informations sur le chunk
+                chunk_metadata.update({
+                    'chunk_index': i,
+                    'total_chunks': len(doc_chunks),
+                    'chunk_size': len(chunk_text),
+                    'chunk_id': f"{doc.metadata.get('doc_id', 'unknown')}_{i}"
+                })
+                
+                all_chunks.append(LangchainDocument(
+                    page_content=chunk_text,
+                    metadata=chunk_metadata
+                ))
+                
+        except Exception as e:
+            logger.error(f"Erreur division en chunks pour {doc.metadata.get('source', 'unknown')}: {str(e)}")
+    
+    logger.info(f"Documents divisés en {len(all_chunks)} chunks")
+    return all_chunks
+
+def get_embeddings(model_name: str):
+    """Crée une instance d'embeddings selon le modèle choisi"""
+    try:
+        model_config = EMBEDDING_MODELS.get(model_name)
+        if not model_config:
+            raise ValueError(f"Modèle d'embedding non supporté: {model_name}")
+        
+        # Vérifier la clé API si nécessaire
+        if model_config.get("requires_api_key", False):
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError("Clé API OpenAI non trouvée dans les variables d'environnement")
+        
+        # Créer l'instance d'embeddings
+        embeddings = model_config["class"](**model_config["params"])
+        
+        logger.info(f"Modèle d'embedding initialisé: {model_config['display_name']}")
+        return embeddings
+        
+    except Exception as e:
+        logger.error(f"Erreur initialisation embeddings {model_name}: {str(e)}")
+        raise
+
+def get_vectorstore(text_chunks: List[LangchainDocument], embeddings, 
+                   vs_manager: VectorStoreManager, embedding_model: str,
+                   chunk_params: Dict, llm_model: str = None, 
+                   custom_name: str = None) -> Tuple[FAISS, str]:
+    """Crée ou charge un vector store FAISS avec gestion de cache"""
+    try:
+        # Générer l'ID du vector store
+        vectorstore_id = vs_manager.generate_vectorstore_id(text_chunks, embedding_model, chunk_params)
+        
+        # Essayer de charger depuis le cache
+        if vs_manager.vectorstore_exists(vectorstore_id):
+            logger.info(f"Chargement du vector store depuis le cache: {vectorstore_id}")
+            vectorstore = vs_manager.load_vectorstore(vectorstore_id, embeddings)
+            if vectorstore:
+                return vectorstore, vectorstore_id
+        
+        # Créer un nouveau vector store
+        logger.info(f"Création d'un nouveau vector store: {vectorstore_id}")
+        with st.spinner("Création du vector store..."):
+            vectorstore = FAISS.from_documents(text_chunks, embeddings)
+        
+        # Sauvegarder
+        vs_manager.save_vectorstore(
+            vectorstore, vectorstore_id, text_chunks, 
+            embedding_model, chunk_params, llm_model, custom_name
         )
-        self.processor = processor
-        self.chunk_params = {
+        
+        return vectorstore, vectorstore_id
+        
+    except Exception as e:
+        logger.error(f"Erreur création vector store: {str(e)}")
+        raise
+
+def get_conversation_chain(vectorstore: FAISS, llm_model: str):
+    """Crée une chaîne de conversation avec le vector store"""
+    try:
+        model_config = LLM_MODELS.get(llm_model)
+        if not model_config:
+            raise ValueError(f"Modèle LLM non supporté: {llm_model}")
+        
+        # Vérifier la clé API
+        api_key = os.getenv(model_config["api_key_env"])
+        if not api_key:
+            raise ValueError(f"Clé API {model_config['api_key_env']} non trouvée")
+        
+        # Créer le modèle LLM
+        llm = ChatGoogleGenerativeAI(
+            model=model_config["model_name"],
+            google_api_key=api_key,
+            temperature=0.1,
+            convert_system_message_to_human=True
+        )
+        
+        # Créer la mémoire de conversation
+        memory = ConversationBufferMemory(
+            memory_key='chat_history',
+            return_messages=True,
+            output_key='answer'
+        )
+        
+        # Créer la chaîne de conversation
+        conversation_chain = ConversationalRetrievalChain.from_llm(
+            llm=llm,
+            retriever=vectorstore.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": 5}
+            ),
+            memory=memory,
+            return_source_documents=True,
+            verbose=True
+        )
+        
+        logger.info(f"Chaîne de conversation créée avec {model_config['display_name']}")
+        return conversation_chain
+        
+    except Exception as e:
+        logger.error(f"Erreur création chaîne de conversation: {str(e)}")
+        raise
+
+def handle_userinput(user_question: str):
+    """Gère la question de l'utilisateur et affiche la réponse"""
+    if st.session_state.conversation is None:
+        st.error("Veuillez d'abord traiter vos documents.")
+        return
+    
+    try:
+        with st.spinner("Génération de la réponse..."):
+            response = st.session_state.conversation({'question': user_question})
+        
+        # Mettre à jour l'historique des messages
+        if 'chat_history' not in st.session_state:
+            st.session_state.chat_history = []
+        
+        st.session_state.chat_history.append({
+            'question': user_question,
+            'answer': response['answer'],
+            'source_documents': response.get('source_documents', []),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # Afficher l'historique
+        display_chat_history()
+        
+    except Exception as e:
+        st.error(f"Erreur lors du traitement de la question: {str(e)}")
+        logger.error(f"Erreur handle_userinput: {str(e)}")
+
+def display_chat_history():
+    """Affiche l'historique des conversations"""
+    if 'chat_history' not in st.session_state or not st.session_state.chat_history:
+        return
+    
+    # Utiliser un timestamp pour rendre les clés uniques
+    current_time = datetime.now().timestamp()
+    
+    for i, chat in enumerate(reversed(st.session_state.chat_history)):
+        # Question de l'utilisateur
+        st.write(user_template.replace("{{MSG}}", chat['question']), unsafe_allow_html=True)
+        
+        # Réponse du bot
+        st.write(bot_template.replace("{{MSG}}", chat['answer']), unsafe_allow_html=True)
+        
+        # Sources (dans un expander)
+        if chat.get('source_documents'):
+            with st.expander(f"📚 Sources pour la question {len(st.session_state.chat_history) - i}", expanded=False):
+                for j, doc in enumerate(chat['source_documents']):
+                    source = doc.metadata.get('source', 'Source inconnue')
+                    doc_type = doc.metadata.get('type', 'unknown')
+                    
+                    # Informations contextuelles selon le type
+                    context_info = ""
+                    if doc_type == 'pdf' and 'page_number' in doc.metadata:
+                        context_info = f" (Page {doc.metadata['page_number']})"
+                    elif doc_type == 'excel' and 'sheet_name' in doc.metadata:
+                        context_info = f" (Feuille: {doc.metadata['sheet_name']})"
+                    elif doc_type == 'web' and 'title' in doc.metadata:
+                        context_info = f" ({doc.metadata['title']})"
+                    
+                    st.write(f"**Source {j+1}:** {source}{context_info}")
+                    
+                    # Générer une clé unique pour chaque text_area
+                    unique_key = f"source_{current_time}_{i}_{j}"
+                    
+                    # Afficher un extrait du contenu
+                    content_preview = doc.page_content[:300] + "..." if len(doc.page_content) > 300 else doc.page_content
+                    st.text_area(
+                        f"Extrait {j+1}:", 
+                        content_preview, 
+                        height=100, 
+                        key=unique_key,
+                        disabled=True
+                    )
+
+def display_vectorstore_info(vs_manager: VectorStoreManager, vectorstore_id: str = None):
+    """Affiche les informations détaillées sur le vector store"""
+    if not vectorstore_id:
+        return
+    
+    metadata = vs_manager.load_vectorstore_metadata(vectorstore_id)
+    if not metadata:
+        return
+    
+    with st.expander("📊 Informations sur le Vector Store", expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write(f"**Nom:** {metadata.get('custom_name', 'N/A')}")
+            st.write(f"**ID:** {vectorstore_id}")
+            st.write(f"**Créé le:** {metadata.get('created_at', 'N/A')[:16]}")
+            st.write(f"**Modèle d'embedding:** {metadata.get('embedding_model_display', 'N/A')}")
+            st.write(f"**Modèle LLM:** {metadata.get('llm_model_display', 'N/A')}")
+        
+        with col2:
+            st.write(f"**Nombre de documents:** {metadata.get('document_count', 0)}")
+            st.write(f"**Chunks totaux:** {metadata.get('total_chunks', 0)}")
+            st.write(f"**Vecteurs:** {metadata.get('vector_count', 0)}")
+            st.write(f"**Taille chunk:** {metadata.get('chunk_params', {}).get('chunk_size', 'N/A')}")
+            st.write(f"**Overlap:** {metadata.get('chunk_params', {}).get('chunk_overlap', 'N/A')}")
+        
+        # Statistiques de traitement
+        processing_stats = metadata.get('processing_stats', {})
+        if processing_stats:
+            st.write("**Statistiques de traitement:**")
+            st.write(f"- Fichiers: {processing_stats.get('total_files', 0)}")
+            st.write(f"- URLs: {processing_stats.get('total_urls', 0)}")
+            st.write(f"- Taille totale: {processing_stats.get('total_size_mb', 0)} MB")
+            st.write(f"- Types: {', '.join(processing_stats.get('file_types', []))}")
+        
+        # Détails des fichiers
+        files_info = metadata.get('files_info', [])
+        if files_info:
+            st.write("**Fichiers traités:**")
+            for file_info in files_info:
+                filename = file_info.get('filename', 'N/A')
+                file_type = file_info.get('type', 'unknown')
+                chunks = file_info.get('total_chunks', 0)
+                
+                additional_info = ""
+                if file_type == 'pdf' and 'pages' in file_info:
+                    pages = file_info['pages']
+                    if pages:
+                        additional_info = f" ({len(pages)} pages)"
+                elif file_type == 'excel' and 'sheets' in file_info:
+                    sheets = file_info['sheets']
+                    if sheets:
+                        additional_info = f" ({len(sheets)} feuilles)"
+                elif file_type == 'docx' and 'word_count' in file_info:
+                    word_count = file_info['word_count']
+                    additional_info = f" ({word_count} mots)"
+                
+                st.write(f"- {filename} ({file_type}){additional_info} - {chunks} chunks")
+        
+        # Détails des URLs
+        urls_info = metadata.get('urls_info', [])
+        if urls_info:
+            st.write("**URLs traitées:**")
+            for url_info in urls_info:
+                url = url_info.get('url', 'N/A')
+                title = url_info.get('title', 'Sans titre')
+                chunks = url_info.get('chunks', 0)
+                status = url_info.get('status_code', 'unknown')
+                
+                st.write(f"- {title} ({status}) - {chunks} chunks")
+                st.write(f"  URL: {url}")
+
+def main():
+    """Fonction principale de l'application Streamlit"""
+    # Configuration de la page
+    st.set_page_config(
+        page_title="Chat RAG Avancé",
+        page_icon="🤖",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
+    # Charger les variables d'environnement
+    load_dotenv()
+    
+    # CSS personnalisé
+    st.write(css, unsafe_allow_html=True)
+    
+    # Titre principal
+    st.title("🤖 Chat RAG Avancé avec Gestion de Vector Stores")
+    st.markdown("*Analysez vos documents et URLs avec une IA conversationnelle avancée*")
+    
+    # Initialiser les composants
+    if 'vs_manager' not in st.session_state:
+        st.session_state.vs_manager = VectorStoreManager()
+    
+    if 'doc_processor' not in st.session_state:
+        st.session_state.doc_processor = DocumentProcessor()
+    
+    # Sidebar pour la configuration
+    with st.sidebar:
+        st.header("⚙️ Configuration")
+        
+        # Configuration des modèles
+        st.subheader("🔧 Modèles")
+        
+        selected_embedding = st.selectbox(
+            "Modèle d'embedding",
+            options=list(EMBEDDING_MODELS.keys()),
+            format_func=lambda x: EMBEDDING_MODELS[x]['display_name'],
+            index=2  # Par défaut HuggingFace Sentence Transformers
+        )
+        
+        selected_llm = st.selectbox(
+            "Modèle de langage",
+            options=list(LLM_MODELS.keys()),
+            format_func=lambda x: LLM_MODELS[x]['display_name'],
+            index=0  # Par défaut Gemini 2.0 Flash
+        )
+        
+        # Configuration du chunking
+        st.subheader("📝 Paramètres de découpage")
+        chunk_size = st.slider("Taille des chunks", 500, 2000, 1000, 100)
+        chunk_overlap = st.slider("Chevauchement", 50, 500, 200, 50)
+        
+        chunk_params = {
             'chunk_size': chunk_size,
             'chunk_overlap': chunk_overlap
         }
-    
-    def split_documents(self, documents: List[LangchainDocument]) -> List[LangchainDocument]:
-        """Divise les documents en chunks en préservant les métadonnées et en enregistrant les chunks"""
-        chunks = []
         
-        for doc in documents:
-            # Diviser le document
-            text_chunks = self.splitter.split_text(doc.page_content)
-            doc_id = doc.metadata.get('doc_id')
+        st.divider()
+        
+        # Gestion des Vector Stores existants
+        st.subheader("💾 Vector Stores Sauvegardés")
+        
+        vectorstores = st.session_state.vs_manager.list_vectorstores()
+        
+        if vectorstores:
+            # Sélection d'un vector store existant
+            vs_options = {f"{vs['custom_name']} ({vs['created_at'][:10]})": vs['vectorstore_id'] 
+                         for vs in vectorstores}
             
-            # Créer des chunks avec métadonnées enrichies
-            for i, chunk_text in enumerate(text_chunks):
-                chunk_metadata = doc.metadata.copy()
-                chunk_id = f"{doc_id}_chunk_{i}"
-                chunk_metadata.update({
-                    'chunk_id': chunk_id,
-                    'chunk_index': i,
-                    'total_chunks': len(text_chunks),
-                    'chunk_size': len(chunk_text),
-                    'parent_doc_id': doc_id
-                })
+            selected_vs_name = st.selectbox(
+                "Charger un Vector Store existant",
+                options=[""] + list(vs_options.keys()),
+                format_func=lambda x: "Sélectionner..." if x == "" else x
+            )
+            
+            if selected_vs_name and selected_vs_name != "":
+                selected_vs_id = vs_options[selected_vs_name]
                 
-                chunk_doc = LangchainDocument(
-                    page_content=chunk_text,
-                    metadata=chunk_metadata
-                )
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🔄 Charger", key="load_vs"):
+                        try:
+                            embeddings = get_embeddings(selected_embedding)
+                            vectorstore = st.session_state.vs_manager.load_vectorstore(selected_vs_id, embeddings)
+                            
+                            if vectorstore:
+                                st.session_state.conversation = get_conversation_chain(vectorstore, selected_llm)
+                                st.session_state.current_vs_id = selected_vs_id
+                                st.success("Vector Store chargé avec succès!")
+                                st.rerun()
+                            else:
+                                st.error("Erreur lors du chargement")
+                                
+                        except Exception as e:
+                            st.error(f"Erreur: {str(e)}")
                 
-                chunks.append(chunk_doc)
-                
-                # Enregistrer le chunk dans le registre du processor
-                if self.processor and doc_id in self.processor.document_registry:
-                    self.processor.document_registry[doc_id]['chunks'].append({
-                        'chunk_id': chunk_id,
-                        'content': chunk_text,
-                        'metadata': chunk_metadata
-                    })
-        
-        return chunks
+                with col2:
+                    if st.button("🗑️ Supprimer", key="delete_vs"):
+                        if st.session_state.vs_manager.delete_vectorstore(selected_vs_id):
+                            st.success("Vector Store supprimé!")
+                            st.rerun()
+                        else:
+                            st.error("Erreur lors de la suppression")
+            
+            # Afficher la liste des vector stores
+            with st.expander("📋 Détails des Vector Stores", expanded=False):
+                for vs in vectorstores:
+                    st.write(f"**{vs['custom_name']}**")
+                    st.write(f"- Créé: {vs['created_at'][:16]}")
+                    st.write(f"- Documents: {vs['document_count']}")
+                    st.write(f"- Chunks: {vs.get('total_chunks', 'Non disponible')}")
 
-class MultiVectorStoreRetriever:
-    """Retriever personnalisé pour interroger plusieurs vector stores simultanément"""
-    
-    def __init__(self, vectorstores: Dict[str, FAISS], k: int = 5):
-        self.vectorstores = vectorstores
-        self.k = k
-    
-    def get_relevant_documents(self, query: str) -> List[LangchainDocument]:
-        """Récupère les documents pertinents de tous les vector stores"""
-        all_docs = []
+                    st.write(f"- Taille: {vs.get('storage_size_mb', 0)} MB")
+                    st.write("---")
+        else:
+            st.info("Aucun Vector Store sauvegardé")
         
-        for vs_id, vectorstore in self.vectorstores.items():
-            try:
-                # Rechercher dans chaque vector store
-                docs = vectorstore.similarity_search(query, k=self.k)
-                
-                # Ajouter l'ID du vector store aux métadonnées
-                for doc in docs:
-                    doc.metadata['vectorstore_id'] = vs_id
-                
-                all_docs.extend(docs)
-                
-            except Exception as e:
-                logger.error(f"Erreur recherche dans vector store {vs_id}: {str(e)}")
-        
-        # Trier par pertinence (score de similarité si disponible)
-        # Pour l'instant, on limite au nombre total de documents demandés
-        return all_docs[:self.k * len(self.vectorstores)]
+        # Nettoyage automatique
+        if st.button("🧹 Nettoyer les anciens VS"):
+            st.session_state.vs_manager.cleanup_old_vectorstores(max_age_days=7, max_count=5)
+            st.success("Nettoyage effectué!")
+            st.rerun()
     
-    def aget_relevant_documents(self, query: str):
-        """Version asynchrone (non implémentée pour cet exemple)"""
-        return self.get_relevant_documents(query)
+    # Zone principale
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        # Interface de chat
+        st.subheader("💬 Conversation")
+        
+        # Afficher l'état actuel
+        if 'conversation' in st.session_state and st.session_state.conversation:
+            if 'current_vs_id' in st.session_state:
+                display_vectorstore_info(st.session_state.vs_manager, st.session_state.current_vs_id)
+            
+            st.success("✅ Prêt pour les questions!")
+            
+            # Zone de saisie de question
+            user_question = st.text_input("Posez votre question:", key="user_question")
+            
+            if user_question:
+                handle_userinput(user_question)
+        else:
+            st.info("Veuillez charger un Vector Store existant ou traiter de nouveaux documents.")
+        
+        # Affichage de l'historique des conversations
+        if 'chat_history' in st.session_state and st.session_state.chat_history:
+            st.divider()
+            display_chat_history()
+    
+    with col2:
+        # Interface de traitement des documents
+        st.subheader("📄 Traitement des Documents")
+        
+        # Upload de fichiers
+        uploaded_files = st.file_uploader(
+            "Choisissez vos fichiers",
+            accept_multiple_files=True,
+            type=['pdf', 'docx', 'doc', 'xlsx', 'xls']
+        )
+        
+        # Saisie d'URLs
+        st.subheader("🌐 URLs à traiter")
+        urls_text = st.text_area(
+            "URLs (une par ligne)",
+            height=100,
+            placeholder="https://example.com\nhttps://autre-site.com"
+        )
+        
+        urls = [url.strip() for url in urls_text.split('\n') if url.strip()]
+        
+        # Nom personnalisé pour le vector store
+        custom_vs_name = st.text_input(
+            "Nom du Vector Store (optionnel)",
+            placeholder="MonAnalyse_2024"
+        )
+        
+        # Bouton de traitement
+        if st.button("🚀 Traiter et Créer Vector Store", type="primary"):
+            if not uploaded_files and not urls:
+                st.error("Veuillez fournir au moins un fichier ou une URL.")
+            else:
+                try:
+                    with st.spinner("Traitement en cours..."):
+                        # Reset du processor
+                        st.session_state.doc_processor.reset()
+                        
+                        # Traitement des documents
+                        documents = st.session_state.doc_processor.process_all_sources(
+                            uploaded_files=uploaded_files,
+                            urls=urls
+                        )
+                        
+                        if not documents:
+                            st.error("Aucun document n'a pu être traité.")
+                        else:
+                            # Affichage des statistiques
+                            stats = st.session_state.doc_processor.stats
+                            st.success(f"✅ {stats['successful_docs']}/{stats['total_docs']} sources traitées")
+                            
+                            if st.session_state.doc_processor.errors:
+                                with st.expander("⚠️ Erreurs de traitement", expanded=False):
+                                    for error in st.session_state.doc_processor.errors:
+                                        st.error(error)
+                            
+                            # Division en chunks
+                            text_chunks = get_text_chunks(documents, chunk_size, chunk_overlap)
+                            vectorstore, vs_id = get_vectorstore(
+                                text_chunks, embeddings, st.session_state.vs_manager,
+                                selected_embedding, chunk_params, selected_llm, custom_vs_name
+                            )
+                            
+                            # Création de la chaîne de conversation
+                            st.session_state.conversation = get_conversation_chain(vectorstore, selected_llm)
+                            st.session_state.current_vs_id = vs_id
+                            
+                            st.success("🎉 Vector Store créé et prêt pour les questions!")
+                            st.rerun()
+                
+                except Exception as e:
+                    st.error(f"Erreur lors du traitement: {str(e)}")
+                    logger.error(f"Erreur main processing: {str(e)}")
+        
+        # Informations sur les fichiers uploadés
+        if uploaded_files:
+            with st.expander("📁 Fichiers sélectionnés", expanded=True):
+                for file in uploaded_files:
+                    file_size = len(file.getvalue()) / (1024 * 1024)  # MB
+                    st.write(f"• {file.name} ({file.type}) - {file_size:.2f} MB")
+        
+        # Informations sur les URLs
+        if urls:
+            with st.expander("🔗 URLs sélectionnées", expanded=True):
+                for url in urls:
+                    st.write(f"• {url}")
 
+if __name__ == "__main__":
+    main()
