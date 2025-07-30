@@ -1,0 +1,628 @@
+{
+  "vectorstore_id": "a87fcbbd7c882954",
+  "custom_name": "VS_3docs_20250730_1408",
+  "created_at": "2025-07-30T14:08:14.825341",
+  "embedding_model": "HuggingFace Sentence Transformers",
+  "chunk_params": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+  },
+  "document_count": 16,
+  "vector_count": 16,
+  "documents_info": [
+    {
+      "source": "EXOS BASES.xls::la poignée recopie",
+      "type": "excel",
+      "chunks": 1,
+      "total_size": 844,
+      "doc_ids": [
+        "excel_58c79950c2e6"
+      ],
+      "first_chunk_preview": "Feuille: la poignée recopie\nColonnes: Unnamed: 0, Unnamed: 1, Unnamed: 2, Unnamed: 3, Unnamed: 4, Unnamed: 5, Unnamed: 6\nNombre de lignes: 25\n\nColonne Unnamed: 0:\nType: Texte/Autre\nValeurs uniques: 7\n"
+    },
+    {
+      "source": "EXOS BASES.xls::CORRIGE la poignée recopie",
+      "type": "excel",
+      "chunks": 1,
+      "total_size": 788,
+      "doc_ids": [
+        "excel_caf0267dd255"
+      ],
+      "first_chunk_preview": "Feuille: CORRIGE la poignée recopie\nColonnes: Unnamed: 0, Unnamed: 1, Unnamed: 2, Unnamed: 3, Unnamed: 4, Unnamed: 5, Unnamed: 6\nNombre de lignes: 13\n\nColonne Unnamed: 0:\nType: Texte/Autre\nValeurs uni"
+    },
+    {
+      "source": "EXOS BASES.xls::mise en forme",
+      "type": "excel",
+      "chunks": 1,
+      "total_size": 707,
+      "doc_ids": [
+        "excel_e604eb228dcb"
+      ],
+      "first_chunk_preview": "Feuille: mise en forme\nColonnes: Unnamed: 0, Unnamed: 1, Unnamed: 2, Unnamed: 3, Unnamed: 4\nNombre de lignes: 8\n\nColonne Unnamed: 1:\nType: Texte/Autre\nValeurs uniques: 7\nÉchantillon de valeurs: Bilan "
+    },
+    {
+      "source": "EXOS BASES.xls::CORRIGE MISE EN FORME",
+      "type": "excel",
+      "chunks": 1,
+      "total_size": 716,
+      "doc_ids": [
+        "excel_1fd86eeb40a4"
+      ],
+      "first_chunk_preview": "Feuille: CORRIGE MISE EN FORME\nColonnes: Unnamed: 0, Unnamed: 1, Unnamed: 2, Unnamed: 3, Unnamed: 4\nNombre de lignes: 8\n\nColonne Unnamed: 1:\nType: Texte/Autre\nValeurs uniques: 7\nÉchantillon de valeurs"
+    },
+    {
+      "source": "EXOS BASES.xls::mise en forme 2",
+      "type": "excel",
+      "chunks": 2,
+      "total_size": 1500,
+      "doc_ids": [
+        "excel_5aec0c7ea167"
+      ],
+      "first_chunk_preview": "Feuille: mise en forme 2\nColonnes: Unnamed: 0, Unnamed: 1, Unnamed: 2, Unnamed: 3, Unnamed: 4, Unnamed: 5, Unnamed: 6, Unnamed: 7\nNombre de lignes: 6\n\nColonne Unnamed: 0:\nType: Texte/Autre\nValeurs uni"
+    },
+    {
+      "source": "EXOS BASES.xls::CORRRIGE mise en forme 2",
+      "type": "excel",
+      "chunks": 2,
+      "total_size": 1509,
+      "doc_ids": [
+        "excel_34630fa919ea"
+      ],
+      "first_chunk_preview": "Feuille: CORRRIGE mise en forme 2\nColonnes: Unnamed: 0, Unnamed: 1, Unnamed: 2, Unnamed: 3, Unnamed: 4, Unnamed: 5, Unnamed: 6, Unnamed: 7\nNombre de lignes: 6\n\nColonne Unnamed: 0:\nType: Texte/Autre\nVa"
+    },
+    {
+      "source": "EXOS BASES.xls::formules",
+      "type": "excel",
+      "chunks": 1,
+      "total_size": 900,
+      "doc_ids": [
+        "excel_f81011e88577"
+      ],
+      "first_chunk_preview": "Feuille: formules\nColonnes: Unnamed: 0, Unnamed: 1, Unnamed: 2, Unnamed: 3, Unnamed: 4, Unnamed: 5, Unnamed: 6, Unnamed: 7\nNombre de lignes: 11\n\nColonne Unnamed: 0:\nType: Texte/Autre\nValeurs uniques: "
+    },
+    {
+      "source": "EXOS BASES.xls::CORRIGE FORMULES",
+      "type": "excel",
+      "chunks": 1,
+      "total_size": 684,
+      "doc_ids": [
+        "excel_c3e5af276bc7"
+      ],
+      "first_chunk_preview": "Feuille: CORRIGE FORMULES\nColonnes: Unnamed: 0, Unnamed: 1, Unnamed: 2, Unnamed: 3, Unnamed: 4, Unnamed: 5, Unnamed: 6, Unnamed: 7\nNombre de lignes: 4\n\nColonne Unnamed: 0:\nType: Texte/Autre\nValeurs un"
+    },
+    {
+      "source": "EXOS BASES.xls::formules 2",
+      "type": "excel",
+      "chunks": 2,
+      "total_size": 1643,
+      "doc_ids": [
+        "excel_f56cf8b53092"
+      ],
+      "first_chunk_preview": "Feuille: formules 2\nColonnes: Unnamed: 0, Unnamed: 1, Unnamed: 2, Unnamed: 3, Unnamed: 4, Unnamed: 5\nNombre de lignes: 45\n\nColonne Unnamed: 0:\nType: Texte/Autre\nValeurs uniques: 17\nÉchantillon de vale"
+    },
+    {
+      "source": "EXOS BASES.xls::Feuil1",
+      "type": "excel",
+      "chunks": 1,
+      "total_size": 46,
+      "doc_ids": [
+        "excel_72cb54126b43"
+      ],
+      "first_chunk_preview": "Feuille: Feuil1\nColonnes: \nNombre de lignes: 0"
+    },
+    {
+      "source": "EXOS BASES.xls::CORRIGE Formules 2",
+      "type": "excel",
+      "chunks": 3,
+      "total_size": 1894,
+      "doc_ids": [
+        "excel_c8cd0c1ffa1d"
+      ],
+      "first_chunk_preview": "Feuille: CORRIGE Formules 2\nColonnes: Unnamed: 0, Unnamed: 1, Unnamed: 2, Unnamed: 3, Unnamed: 4, Unnamed: 5\nNombre de lignes: 45\n\nColonne Unnamed: 0:\nType: Texte/Autre\nValeurs uniques: 18\nÉchantillon"
+    }
+  ],
+  "sources_mapping": {
+    "excel_58c79950c2e6_0": {
+      "source": "EXOS BASES.xls::la poignée recopie",
+      "doc_type": "excel",
+      "doc_id": "excel_58c79950c2e6",
+      "metadata": {
+        "doc_id": "excel_58c79950c2e6",
+        "source": "EXOS BASES.xls::la poignée recopie",
+        "type": "excel",
+        "size": 844,
+        "processed_at": "2025-07-30T14:08:09.141229",
+        "hash": "e1278e42",
+        "sheet_name": "la poignée recopie",
+        "total_sheets": 11,
+        "rows": 25,
+        "columns": 7,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5",
+          "Unnamed: 6"
+        ],
+        "has_numeric_data": true,
+        "chunk_id": "excel_58c79950c2e6_0",
+        "chunk_index": 0,
+        "total_chunks": 1,
+        "chunk_size": 844,
+        "global_chunk_id": 0
+      }
+    },
+    "excel_caf0267dd255_0": {
+      "source": "EXOS BASES.xls::CORRIGE la poignée recopie",
+      "doc_type": "excel",
+      "doc_id": "excel_caf0267dd255",
+      "metadata": {
+        "doc_id": "excel_caf0267dd255",
+        "source": "EXOS BASES.xls::CORRIGE la poignée recopie",
+        "type": "excel",
+        "size": 788,
+        "processed_at": "2025-07-30T14:08:09.148642",
+        "hash": "652da199",
+        "sheet_name": "CORRIGE la poignée recopie",
+        "total_sheets": 11,
+        "rows": 13,
+        "columns": 7,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5",
+          "Unnamed: 6"
+        ],
+        "has_numeric_data": true,
+        "chunk_id": "excel_caf0267dd255_0",
+        "chunk_index": 0,
+        "total_chunks": 1,
+        "chunk_size": 788,
+        "global_chunk_id": 1
+      }
+    },
+    "excel_e604eb228dcb_0": {
+      "source": "EXOS BASES.xls::mise en forme",
+      "doc_type": "excel",
+      "doc_id": "excel_e604eb228dcb",
+      "metadata": {
+        "doc_id": "excel_e604eb228dcb",
+        "source": "EXOS BASES.xls::mise en forme",
+        "type": "excel",
+        "size": 707,
+        "processed_at": "2025-07-30T14:08:09.157606",
+        "hash": "640f27eb",
+        "sheet_name": "mise en forme",
+        "total_sheets": 11,
+        "rows": 8,
+        "columns": 5,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4"
+        ],
+        "has_numeric_data": true,
+        "chunk_id": "excel_e604eb228dcb_0",
+        "chunk_index": 0,
+        "total_chunks": 1,
+        "chunk_size": 707,
+        "global_chunk_id": 2
+      }
+    },
+    "excel_1fd86eeb40a4_0": {
+      "source": "EXOS BASES.xls::CORRIGE MISE EN FORME",
+      "doc_type": "excel",
+      "doc_id": "excel_1fd86eeb40a4",
+      "metadata": {
+        "doc_id": "excel_1fd86eeb40a4",
+        "source": "EXOS BASES.xls::CORRIGE MISE EN FORME",
+        "type": "excel",
+        "size": 716,
+        "processed_at": "2025-07-30T14:08:09.164889",
+        "hash": "65fedd00",
+        "sheet_name": "CORRIGE MISE EN FORME",
+        "total_sheets": 11,
+        "rows": 8,
+        "columns": 5,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4"
+        ],
+        "has_numeric_data": true,
+        "chunk_id": "excel_1fd86eeb40a4_0",
+        "chunk_index": 0,
+        "total_chunks": 1,
+        "chunk_size": 716,
+        "global_chunk_id": 3
+      }
+    },
+    "excel_5aec0c7ea167_0": {
+      "source": "EXOS BASES.xls::mise en forme 2",
+      "doc_type": "excel",
+      "doc_id": "excel_5aec0c7ea167",
+      "metadata": {
+        "doc_id": "excel_5aec0c7ea167",
+        "source": "EXOS BASES.xls::mise en forme 2",
+        "type": "excel",
+        "size": 1347,
+        "processed_at": "2025-07-30T14:08:09.176408",
+        "hash": "30ebc93e",
+        "sheet_name": "mise en forme 2",
+        "total_sheets": 11,
+        "rows": 6,
+        "columns": 8,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5",
+          "Unnamed: 6",
+          "Unnamed: 7"
+        ],
+        "has_numeric_data": false,
+        "chunk_id": "excel_5aec0c7ea167_0",
+        "chunk_index": 0,
+        "total_chunks": 2,
+        "chunk_size": 849,
+        "global_chunk_id": 4
+      }
+    },
+    "excel_5aec0c7ea167_1": {
+      "source": "EXOS BASES.xls::mise en forme 2",
+      "doc_type": "excel",
+      "doc_id": "excel_5aec0c7ea167",
+      "metadata": {
+        "doc_id": "excel_5aec0c7ea167",
+        "source": "EXOS BASES.xls::mise en forme 2",
+        "type": "excel",
+        "size": 1347,
+        "processed_at": "2025-07-30T14:08:09.176408",
+        "hash": "30ebc93e",
+        "sheet_name": "mise en forme 2",
+        "total_sheets": 11,
+        "rows": 6,
+        "columns": 8,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5",
+          "Unnamed: 6",
+          "Unnamed: 7"
+        ],
+        "has_numeric_data": false,
+        "chunk_id": "excel_5aec0c7ea167_1",
+        "chunk_index": 1,
+        "total_chunks": 2,
+        "chunk_size": 651,
+        "global_chunk_id": 5
+      }
+    },
+    "excel_34630fa919ea_0": {
+      "source": "EXOS BASES.xls::CORRRIGE mise en forme 2",
+      "doc_type": "excel",
+      "doc_id": "excel_34630fa919ea",
+      "metadata": {
+        "doc_id": "excel_34630fa919ea",
+        "source": "EXOS BASES.xls::CORRRIGE mise en forme 2",
+        "type": "excel",
+        "size": 1356,
+        "processed_at": "2025-07-30T14:08:09.192987",
+        "hash": "52bb3d8c",
+        "sheet_name": "CORRRIGE mise en forme 2",
+        "total_sheets": 11,
+        "rows": 6,
+        "columns": 8,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5",
+          "Unnamed: 6",
+          "Unnamed: 7"
+        ],
+        "has_numeric_data": false,
+        "chunk_id": "excel_34630fa919ea_0",
+        "chunk_index": 0,
+        "total_chunks": 2,
+        "chunk_size": 858,
+        "global_chunk_id": 6
+      }
+    },
+    "excel_34630fa919ea_1": {
+      "source": "EXOS BASES.xls::CORRRIGE mise en forme 2",
+      "doc_type": "excel",
+      "doc_id": "excel_34630fa919ea",
+      "metadata": {
+        "doc_id": "excel_34630fa919ea",
+        "source": "EXOS BASES.xls::CORRRIGE mise en forme 2",
+        "type": "excel",
+        "size": 1356,
+        "processed_at": "2025-07-30T14:08:09.192987",
+        "hash": "52bb3d8c",
+        "sheet_name": "CORRRIGE mise en forme 2",
+        "total_sheets": 11,
+        "rows": 6,
+        "columns": 8,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5",
+          "Unnamed: 6",
+          "Unnamed: 7"
+        ],
+        "has_numeric_data": false,
+        "chunk_id": "excel_34630fa919ea_1",
+        "chunk_index": 1,
+        "total_chunks": 2,
+        "chunk_size": 651,
+        "global_chunk_id": 7
+      }
+    },
+    "excel_f81011e88577_0": {
+      "source": "EXOS BASES.xls::formules",
+      "doc_type": "excel",
+      "doc_id": "excel_f81011e88577",
+      "metadata": {
+        "doc_id": "excel_f81011e88577",
+        "source": "EXOS BASES.xls::formules",
+        "type": "excel",
+        "size": 900,
+        "processed_at": "2025-07-30T14:08:09.202896",
+        "hash": "ba55f9d1",
+        "sheet_name": "formules",
+        "total_sheets": 11,
+        "rows": 11,
+        "columns": 8,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5",
+          "Unnamed: 6",
+          "Unnamed: 7"
+        ],
+        "has_numeric_data": true,
+        "chunk_id": "excel_f81011e88577_0",
+        "chunk_index": 0,
+        "total_chunks": 1,
+        "chunk_size": 900,
+        "global_chunk_id": 8
+      }
+    },
+    "excel_c3e5af276bc7_0": {
+      "source": "EXOS BASES.xls::CORRIGE FORMULES",
+      "doc_type": "excel",
+      "doc_id": "excel_c3e5af276bc7",
+      "metadata": {
+        "doc_id": "excel_c3e5af276bc7",
+        "source": "EXOS BASES.xls::CORRIGE FORMULES",
+        "type": "excel",
+        "size": 684,
+        "processed_at": "2025-07-30T14:08:09.212282",
+        "hash": "04657e78",
+        "sheet_name": "CORRIGE FORMULES",
+        "total_sheets": 11,
+        "rows": 4,
+        "columns": 8,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5",
+          "Unnamed: 6",
+          "Unnamed: 7"
+        ],
+        "has_numeric_data": true,
+        "chunk_id": "excel_c3e5af276bc7_0",
+        "chunk_index": 0,
+        "total_chunks": 1,
+        "chunk_size": 684,
+        "global_chunk_id": 9
+      }
+    },
+    "excel_f56cf8b53092_0": {
+      "source": "EXOS BASES.xls::formules 2",
+      "doc_type": "excel",
+      "doc_id": "excel_f56cf8b53092",
+      "metadata": {
+        "doc_id": "excel_f56cf8b53092",
+        "source": "EXOS BASES.xls::formules 2",
+        "type": "excel",
+        "size": 1645,
+        "processed_at": "2025-07-30T14:08:09.539892",
+        "hash": "48fce05d",
+        "sheet_name": "formules 2",
+        "total_sheets": 11,
+        "rows": 45,
+        "columns": 6,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5"
+        ],
+        "has_numeric_data": true,
+        "chunk_id": "excel_f56cf8b53092_0",
+        "chunk_index": 0,
+        "total_chunks": 2,
+        "chunk_size": 666,
+        "global_chunk_id": 10
+      }
+    },
+    "excel_f56cf8b53092_1": {
+      "source": "EXOS BASES.xls::formules 2",
+      "doc_type": "excel",
+      "doc_id": "excel_f56cf8b53092",
+      "metadata": {
+        "doc_id": "excel_f56cf8b53092",
+        "source": "EXOS BASES.xls::formules 2",
+        "type": "excel",
+        "size": 1645,
+        "processed_at": "2025-07-30T14:08:09.539892",
+        "hash": "48fce05d",
+        "sheet_name": "formules 2",
+        "total_sheets": 11,
+        "rows": 45,
+        "columns": 6,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5"
+        ],
+        "has_numeric_data": true,
+        "chunk_id": "excel_f56cf8b53092_1",
+        "chunk_index": 1,
+        "total_chunks": 2,
+        "chunk_size": 977,
+        "global_chunk_id": 11
+      }
+    },
+    "excel_72cb54126b43_0": {
+      "source": "EXOS BASES.xls::Feuil1",
+      "doc_type": "excel",
+      "doc_id": "excel_72cb54126b43",
+      "metadata": {
+        "doc_id": "excel_72cb54126b43",
+        "source": "EXOS BASES.xls::Feuil1",
+        "type": "excel",
+        "size": 46,
+        "processed_at": "2025-07-30T14:08:09.539892",
+        "hash": "3edb752e",
+        "sheet_name": "Feuil1",
+        "total_sheets": 11,
+        "rows": 0,
+        "columns": 0,
+        "column_names": [],
+        "has_numeric_data": false,
+        "chunk_id": "excel_72cb54126b43_0",
+        "chunk_index": 0,
+        "total_chunks": 1,
+        "chunk_size": 46,
+        "global_chunk_id": 12
+      }
+    },
+    "excel_c8cd0c1ffa1d_0": {
+      "source": "EXOS BASES.xls::CORRIGE Formules 2",
+      "doc_type": "excel",
+      "doc_id": "excel_c8cd0c1ffa1d",
+      "metadata": {
+        "doc_id": "excel_c8cd0c1ffa1d",
+        "source": "EXOS BASES.xls::CORRIGE Formules 2",
+        "type": "excel",
+        "size": 1767,
+        "processed_at": "2025-07-30T14:08:09.549851",
+        "hash": "0a42b3f6",
+        "sheet_name": "CORRIGE Formules 2",
+        "total_sheets": 11,
+        "rows": 45,
+        "columns": 6,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5"
+        ],
+        "has_numeric_data": true,
+        "chunk_id": "excel_c8cd0c1ffa1d_0",
+        "chunk_index": 0,
+        "total_chunks": 3,
+        "chunk_size": 681,
+        "global_chunk_id": 13
+      }
+    },
+    "excel_c8cd0c1ffa1d_1": {
+      "source": "EXOS BASES.xls::CORRIGE Formules 2",
+      "doc_type": "excel",
+      "doc_id": "excel_c8cd0c1ffa1d",
+      "metadata": {
+        "doc_id": "excel_c8cd0c1ffa1d",
+        "source": "EXOS BASES.xls::CORRIGE Formules 2",
+        "type": "excel",
+        "size": 1767,
+        "processed_at": "2025-07-30T14:08:09.549851",
+        "hash": "0a42b3f6",
+        "sheet_name": "CORRIGE Formules 2",
+        "total_sheets": 11,
+        "rows": 45,
+        "columns": 6,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5"
+        ],
+        "has_numeric_data": true,
+        "chunk_id": "excel_c8cd0c1ffa1d_1",
+        "chunk_index": 1,
+        "total_chunks": 3,
+        "chunk_size": 978,
+        "global_chunk_id": 14
+      }
+    },
+    "excel_c8cd0c1ffa1d_2": {
+      "source": "EXOS BASES.xls::CORRIGE Formules 2",
+      "doc_type": "excel",
+      "doc_id": "excel_c8cd0c1ffa1d",
+      "metadata": {
+        "doc_id": "excel_c8cd0c1ffa1d",
+        "source": "EXOS BASES.xls::CORRIGE Formules 2",
+        "type": "excel",
+        "size": 1767,
+        "processed_at": "2025-07-30T14:08:09.549851",
+        "hash": "0a42b3f6",
+        "sheet_name": "CORRIGE Formules 2",
+        "total_sheets": 11,
+        "rows": 45,
+        "columns": 6,
+        "column_names": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Unnamed: 3",
+          "Unnamed: 4",
+          "Unnamed: 5"
+        ],
+        "has_numeric_data": true,
+        "chunk_id": "excel_c8cd0c1ffa1d_2",
+        "chunk_index": 2,
+        "total_chunks": 3,
+        "chunk_size": 235,
+        "global_chunk_id": 15
+      }
+    }
+  },
+  "version": "1.0"
+}
