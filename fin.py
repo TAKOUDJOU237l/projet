@@ -1181,6 +1181,9 @@ def main():
                                     for error in st.session_state.doc_processor.errors:
                                         st.error(error)
                             
+                            # Initialiser les embeddings avant de les utiliser
+                            embeddings = get_embeddings(selected_embedding)
+                            
                             # Division en chunks
                             text_chunks = get_text_chunks(documents, chunk_size, chunk_overlap)
                             vectorstore, vs_id = get_vectorstore(
@@ -1194,7 +1197,7 @@ def main():
                             
                             st.success("🎉 Vector Store créé et prêt pour les questions!")
                             st.rerun()
-                
+        
                 except Exception as e:
                     st.error(f"Erreur lors du traitement: {str(e)}")
                     logger.error(f"Erreur main processing: {str(e)}")

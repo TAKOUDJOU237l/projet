@@ -1,0 +1,31 @@
+{
+  "vectorstore_id": "58858c7dab6d95e1",
+  "custom_name": "VS_1docs_20250802_1134",
+  "created_at": "2025-08-02T11:34:49.417828",
+  "embedding_model": "HuggingFace Sentence Transformers",
+  "chunk_params": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+  },
+  "document_count": 103,
+  "vector_count": 103,
+  "has_segments": true,
+  "segments": {
+    "pdf_04d425dc4394": {
+      "doc_id": "pdf_04d425dc4394",
+      "source": "Perceptron multicouche _ fonctionnement et applications_.pdf",
+      "type": "pdf",
+      "chunk_count": 103,
+      "vector_count": 103
+    }
+  },
+  "documents_info": [
+    {
+      "source": "Perceptron multicouche _ fonctionnement et applications_.pdf",
+      "type": "pdf",
+      "doc_id": "pdf_04d425dc4394",
+      "chunks": 103,
+      "total_size": 92278
+    }
+  ]
+}

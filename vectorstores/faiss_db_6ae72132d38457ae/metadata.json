@@ -1,0 +1,59 @@
+{
+  "vectorstore_id": "6ae72132d38457ae",
+  "custom_name": "VS_1docs_20250802_1111",
+  "created_at": "2025-08-02T11:11:46.461492",
+  "embedding_model": "HuggingFace Sentence Transformers",
+  "chunk_params": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+  },
+  "document_count": 187,
+  "vector_count": 187,
+  "has_segments": true,
+  "segments": {
+    "pdf_50f07587bce7": {
+      "doc_id": "pdf_50f07587bce7",
+      "source": "Perceptron multicouche _ fonctionnement et applications_.pdf",
+      "type": "pdf",
+      "chunk_count": 103,
+      "vector_count": 103
+    },
+    "excel_ebfbce04318f": {
+      "doc_id": "excel_ebfbce04318f",
+      "source": "EXOS BASES.xls",
+      "type": "excel",
+      "chunk_count": 22,
+      "vector_count": 22
+    },
+    "docx_5fb0fdded383": {
+      "doc_id": "docx_5fb0fdded383",
+      "source": "OCR extraction index compteur_.docx",
+      "type": "docx",
+      "chunk_count": 62,
+      "vector_count": 62
+    }
+  },
+  "documents_info": [
+    {
+      "source": "Perceptron multicouche _ fonctionnement et applications_.pdf",
+      "type": "pdf",
+      "doc_id": "pdf_50f07587bce7",
+      "chunks": 103,
+      "total_size": 92278
+    },
+    {
+      "source": "EXOS BASES.xls",
+      "type": "excel",
+      "doc_id": "excel_ebfbce04318f",
+      "chunks": 22,
+      "total_size": 12584
+    },
+    {
+      "source": "OCR extraction index compteur_.docx",
+      "type": "docx",
+      "doc_id": "docx_5fb0fdded383",
+      "chunks": 62,
+      "total_size": 49460
+    }
+  ]
+}
