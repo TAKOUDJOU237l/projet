@@ -1,0 +1,73 @@
+{
+  "vectorstore_id": "e57644351a71a6fd",
+  "custom_name": "VS_1docs_20250804_1012",
+  "created_at": "2025-08-04T10:12:19.537400",
+  "embedding_model": "HuggingFace Multilingual",
+  "chunk_params": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+  },
+  "document_count": 287,
+  "vector_count": 287,
+  "has_segments": true,
+  "segments": {
+    "pdf_f8fdd6a3efc9": {
+      "doc_id": "pdf_f8fdd6a3efc9",
+      "source": "478039289-PROGRAMME-2ND-CYCLE-ACA-pdf.pdf",
+      "type": "pdf",
+      "chunk_count": 123,
+      "vector_count": 123
+    },
+    "pdf_bd6cd998de8f": {
+      "doc_id": "pdf_bd6cd998de8f",
+      "source": "Perceptron multicouche _ fonctionnement et applications_.pdf",
+      "type": "pdf",
+      "chunk_count": 103,
+      "vector_count": 103
+    },
+    "excel_a946bacf82f7": {
+      "doc_id": "excel_a946bacf82f7",
+      "source": "EXOS BASES(1).xls",
+      "type": "excel",
+      "chunk_count": 22,
+      "vector_count": 22
+    },
+    "docx_cc5b580da928": {
+      "doc_id": "docx_cc5b580da928",
+      "source": "Modèles Transformer et langage IA_.docx",
+      "type": "docx",
+      "chunk_count": 39,
+      "vector_count": 39
+    }
+  },
+  "documents_info": [
+    {
+      "source": "478039289-PROGRAMME-2ND-CYCLE-ACA-pdf.pdf",
+      "type": "pdf",
+      "doc_id": "pdf_f8fdd6a3efc9",
+      "chunks": 123,
+      "total_size": 99790
+    },
+    {
+      "source": "Perceptron multicouche _ fonctionnement et applications_.pdf",
+      "type": "pdf",
+      "doc_id": "pdf_bd6cd998de8f",
+      "chunks": 103,
+      "total_size": 92278
+    },
+    {
+      "source": "EXOS BASES(1).xls",
+      "type": "excel",
+      "doc_id": "excel_a946bacf82f7",
+      "chunks": 22,
+      "total_size": 12584
+    },
+    {
+      "source": "Modèles Transformer et langage IA_.docx",
+      "type": "docx",
+      "doc_id": "docx_cc5b580da928",
+      "chunks": 39,
+      "total_size": 28788
+    }
+  ]
+}

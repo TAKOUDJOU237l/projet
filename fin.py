@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from langchain.schema import Document as LangchainDocument
+from langchain.prompts import PromptTemplate
 from htmlTemplates import css, bot_template, user_template
 
 import os
@@ -48,14 +49,12 @@ EMBEDDING_MODELS = {
     "OpenAI": {
         "class": OpenAIEmbeddings,
         "params": {},
-        "requires_api_key": True,
-        "display_name": "OpenAI Text-Embedding-3"
+        "requires_api_key": True
     },
     "HuggingFace Instructor": {
         "class": HuggingFaceInstructEmbeddings,
         "params": {"model_name": "hku-nlp/instructor-xl"},
-        "requires_api_key": False,
-        "display_name": "HF Instructor XL"
+        "requires_api_key": False
     },
     "HuggingFace Sentence Transformers": {
         "class": HuggingFaceEmbeddings,
@@ -63,8 +62,7 @@ EMBEDDING_MODELS = {
             "model_name": "sentence-transformers/all-MiniLM-L6-v2",
             "model_kwargs": {"device": "cpu"}
         },
-        "requires_api_key": False,
-        "display_name": "HF MiniLM-L6-v2"
+        "requires_api_key": False
     },
     "HuggingFace BGE Small": {
         "class": HuggingFaceEmbeddings,
@@ -72,8 +70,7 @@ EMBEDDING_MODELS = {
             "model_name": "BAAI/bge-small-en-v1.5",
             "model_kwargs": {"device": "cpu"}
         },
-        "requires_api_key": False,
-        "display_name": "HF BGE Small v1.5"
+        "requires_api_key": False
     },
     "HuggingFace Multilingual": {
         "class": HuggingFaceEmbeddings,
@@ -81,8 +78,7 @@ EMBEDDING_MODELS = {
             "model_name": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
             "model_kwargs": {"device": "cpu"}
         },
-        "requires_api_key": False,
-        "display_name": "HF Multilingual MiniLM"
+        "requires_api_key": False
     }
 }
 
@@ -90,25 +86,22 @@ LLM_MODELS = {
     "Gemini 2.0 Flash": {
         "model_name": "gemini-2.0-flash-exp",
         "api_key_env": "GOOGLE_API_KEY",
-        "description": "Google Gemini Pro - Modèle puissant et rapide",
-        "display_name": "Gemini 2.0 Flash"
+        "description": "Google Gemini Pro - Modèle puissant et rapide"
     },
     "Gemini Pro 1.5": {
         "model_name": "gemini-1.5-pro-latest",
         "api_key_env": "GOOGLE_API_KEY",
-        "description": "Google Gemini 1.5 Pro - Modèle le plus avancé",
-        "display_name": "Gemini 1.5 Pro"
+        "description": "Google Gemini 1.5 Pro - Modèle le plus avancé"
     },
     "Gemini Pro": {
         "model_name": "gemini-pro",
         "api_key_env": "GOOGLE_API_KEY",
-        "description": "Google Gemini Pro - Modèle standard performant",
-        "display_name": "Gemini Pro"
+        "description": "Google Gemini Pro - Modèle standard performant"
     }
 }
 
-class VectorStoreManager:
-    """Gestionnaire des vector stores FAISS avec sauvegarde en répertoire"""
+class SegmentedVectorStoreManager:
+    """Gestionnaire des vector stores FAISS avec segmentation par document"""
     
     def __init__(self, base_dir: str = VECTORSTORE_BASE_DIR):
         self.base_dir = Path(base_dir)
@@ -165,10 +158,33 @@ class VectorStoreManager:
                 return json.load(f)
         return None
     
-    def save_vectorstore(self, vectorstore: FAISS, vectorstore_id: str, 
-                        documents: List[LangchainDocument], embedding_model: str,
-                        chunk_params: Dict, llm_model: str = None, custom_name: str = None) -> bool:
-        """Sauvegarde le vector store en répertoire avec métadonnées détaillées"""
+    def get_document_segments(self, vectorstore_id: str) -> List[Dict]:
+        """Récupère la liste des segments de documents disponibles"""
+        vectorstore_path = self.get_vectorstore_path(vectorstore_id)
+        segments_dir = vectorstore_path / "segments"
+        
+        segments = []
+        if segments_dir.exists():
+            metadata = self.load_vectorstore_metadata(vectorstore_id)
+            if metadata and metadata.get('segments'):
+                for doc_id, segment_info in metadata['segments'].items():
+                    segment_path = segments_dir / doc_id
+                    if segment_path.exists() and (segment_path / "index.faiss").exists():
+                        segments.append({
+                            'doc_id': doc_id,
+                            'source': segment_info.get('source', 'Unknown'),
+                            'type': segment_info.get('type', 'unknown'),
+                            'chunk_count': segment_info.get('chunk_count', 0),
+                            'vector_count': segment_info.get('vector_count', 0),
+                            'path': str(segment_path)
+                        })
+        
+        return segments
+    
+    def save_segmented_vectorstore(self, vectorstore: FAISS, vectorstore_id: str, 
+                                 documents: List[LangchainDocument], embedding_model: str,
+                                 chunk_params: Dict, custom_name: str = None) -> bool:
+        """Sauvegarde le vector store avec segmentation par document"""
         try:
             vectorstore_path = self.get_vectorstore_path(vectorstore_id)
             
@@ -179,121 +195,153 @@ class VectorStoreManager:
             # Créer le répertoire
             vectorstore_path.mkdir(parents=True, exist_ok=True)
             
-            # Sauvegarder le vector store
+            # Sauvegarder le vector store principal
             vectorstore.save_local(str(vectorstore_path))
             
-            # Analyser les documents pour extraire les informations détaillées
-            files_info = {}
-            urls_info = []
-            total_chunks = 0
+            # Créer des vector stores séparés pour chaque document source
+            document_segments = self._create_document_segments(documents, embedding_model)
             
-            for doc in documents:
-                source = doc.metadata.get('source', 'Unknown')
-                doc_type = doc.metadata.get('type', 'unknown')
-                
-                if doc_type == 'web':
-                    # Pour les URLs
-                    url_info = {
-                        'url': source,
-                        'title': doc.metadata.get('title', 'Sans titre'),
-                        'chunks': doc.metadata.get('total_chunks', 1),
-                        'content_size': doc.metadata.get('size', 0),
-                        'status_code': doc.metadata.get('status_code', 'unknown'),
-                        'content_type': doc.metadata.get('content_type', 'unknown')
-                    }
-                    
-                    # Vérifier si cette URL n'est pas déjà ajoutée
-                    existing_url = next((u for u in urls_info if u['url'] == source), None)
-                    if not existing_url:
-                        urls_info.append(url_info)
-                    
-                else:
-                    # Pour les fichiers
-                    if source not in files_info:
-                        files_info[source] = {
-                            'filename': source,
-                            'type': doc_type,
-                            'pages': set() if doc_type == 'pdf' else None,
-                            'sheets': set() if doc_type == 'excel' else None,
-                            'total_chunks': 0,
-                            'total_size': 0,
-                            'word_count': 0
-                        }
-                    
-                    # Mettre à jour les informations
-                    files_info[source]['total_chunks'] += 1
-                    files_info[source]['total_size'] += doc.metadata.get('size', 0)
-                    
-                    if doc_type == 'pdf' and 'page_number' in doc.metadata:
-                        files_info[source]['pages'].add(doc.metadata['page_number'])
-                    elif doc_type == 'excel' and 'sheet_name' in doc.metadata:
-                        files_info[source]['sheets'].add(doc.metadata['sheet_name'])
-                    elif doc_type == 'docx' and 'word_count' in doc.metadata:
-                        files_info[source]['word_count'] = doc.metadata['word_count']
-                
-                total_chunks += 1
+            # Sauvegarder chaque segment
+            segments_dir = vectorstore_path / "segments"
+            segments_dir.mkdir(exist_ok=True)
             
-            # Convertir les sets en listes pour la sérialisation JSON
-            for file_info in files_info.values():
-                if file_info['pages'] is not None:
-                    file_info['pages'] = sorted(list(file_info['pages']))
-                if file_info['sheets'] is not None:
-                    file_info['sheets'] = sorted(list(file_info['sheets']))
+            for doc_id, segment_data in document_segments.items():
+                segment_path = segments_dir / doc_id
+                segment_path.mkdir(exist_ok=True)
+                segment_data['vectorstore'].save_local(str(segment_path))
             
             # Générer un nom personnalisé si non fourni
             if not custom_name:
-                file_count = len(files_info)
-                url_count = len(urls_info)
-                if file_count > 0 and url_count > 0:
-                    custom_name = f"Mix_{file_count}fichiers_{url_count}urls_{datetime.now().strftime('%m%d_%H%M')}"
-                elif file_count > 0:
-                    if file_count == 1:
-                        filename = list(files_info.keys())[0]
-                        # Extraire le nom sans extension
-                        name_without_ext = Path(filename).stem
-                        custom_name = f"{name_without_ext}_{datetime.now().strftime('%m%d_%H%M')}"
-                    else:
-                        custom_name = f"{file_count}fichiers_{datetime.now().strftime('%m%d_%H%M')}"
-                elif url_count > 0:
-                    custom_name = f"{url_count}urls_{datetime.now().strftime('%m%d_%H%M')}"
-                else:
-                    custom_name = f"VS_{datetime.now().strftime('%Y%m%d_%H%M')}"
+                sources = list(set([doc.metadata.get('source', 'Unknown')[:20] for doc in documents[:3]]))
+                custom_name = f"VS_{len(sources)}docs_{datetime.now().strftime('%Y%m%d_%H%M')}"
             
-            # Créer les métadonnées complètes
+            # Créer les métadonnées avec information de segmentation
             metadata = {
                 'vectorstore_id': vectorstore_id,
                 'custom_name': custom_name,
                 'created_at': datetime.now().isoformat(),
                 'embedding_model': embedding_model,
-                'embedding_model_display': EMBEDDING_MODELS.get(embedding_model, {}).get('display_name', embedding_model),
-                'llm_model': llm_model,
-                'llm_model_display': LLM_MODELS.get(llm_model, {}).get('display_name', llm_model) if llm_model else None,
                 'chunk_params': chunk_params,
-                'document_count': len(set([doc.metadata.get('source') for doc in documents])),
-                'total_chunks': total_chunks,
+                'document_count': len(documents),
                 'vector_count': vectorstore.index.ntotal,
-                'files_info': list(files_info.values()),
-                'urls_info': urls_info,
-                'processing_stats': {
-                    'total_files': len(files_info),
-                    'total_urls': len(urls_info),
-                    'total_size_mb': round(sum([f['total_size'] for f in files_info.values()]) / (1024 * 1024), 2),
-                    'file_types': list(set([f['type'] for f in files_info.values()]))
-                }
+                'has_segments': True,
+                'segments': {},
+                'documents_info': []
             }
+            
+            # Ajouter les informations des documents et segments
+            doc_sources = {}
+            for doc in documents:
+                source = doc.metadata.get('source', 'Unknown')
+                doc_type = doc.metadata.get('type', 'unknown')
+                doc_id = doc.metadata.get('doc_id', f"doc_{hashlib.md5(source.encode()).hexdigest()[:8]}")
+                
+                if source not in doc_sources:
+                    doc_sources[source] = {
+                        'source': source,
+                        'type': doc_type,
+                        'doc_id': doc_id,
+                        'chunks': 0,
+                        'total_size': 0
+                    }
+                
+                doc_sources[source]['chunks'] += 1
+                doc_sources[source]['total_size'] += len(doc.page_content)
+            
+            metadata['documents_info'] = list(doc_sources.values())
+            
+            # Ajouter les informations des segments
+            for doc_id, segment_data in document_segments.items():
+                metadata['segments'][doc_id] = {
+                    'doc_id': doc_id,
+                    'source': segment_data['source'],
+                    'type': segment_data['type'],
+                    'chunk_count': segment_data['chunk_count'],
+                    'vector_count': segment_data['vectorstore'].index.ntotal
+                }
             
             # Sauvegarder les métadonnées
             self.save_vectorstore_metadata(vectorstore_id, metadata)
             
-            logger.info(f"Vector store sauvegardé: {vectorstore_path}")
+            logger.info(f"Vector store segmenté sauvegardé: {vectorstore_path} avec {len(document_segments)} segments")
             return True
             
         except Exception as e:
-            logger.error(f"Erreur sauvegarde vector store {vectorstore_id}: {str(e)}")
+            logger.error(f"Erreur sauvegarde vector store segmenté {vectorstore_id}: {str(e)}")
             return False
     
+    def _create_document_segments(self, documents: List[LangchainDocument], 
+                                embedding_model: str) -> Dict[str, Dict]:
+        """Crée des segments de vector store pour chaque document"""
+        # Regrouper les chunks par document source
+        doc_groups = {}
+        
+        for doc in documents:
+            doc_id = doc.metadata.get('doc_id')
+            if not doc_id:
+                # Générer un doc_id basé sur la source
+                source = doc.metadata.get('source', 'Unknown')
+                doc_id = f"doc_{hashlib.md5(source.encode()).hexdigest()[:8]}"
+                doc.metadata['doc_id'] = doc_id
+            
+            if doc_id not in doc_groups:
+                doc_groups[doc_id] = {
+                    'documents': [],
+                    'source': doc.metadata.get('source', 'Unknown'),
+                    'type': doc.metadata.get('type', 'unknown')
+                }
+            
+            doc_groups[doc_id]['documents'].append(doc)
+        
+        # Créer un vector store pour chaque groupe
+        document_segments = {}
+        embeddings = self._get_embeddings_instance(embedding_model)
+        
+        if embeddings:
+            for doc_id, group_data in doc_groups.items():
+                try:
+                    # Créer le vector store pour ce document
+                    segment_vectorstore = FAISS.from_documents(group_data['documents'], embeddings)
+                    
+                    document_segments[doc_id] = {
+                        'vectorstore': segment_vectorstore,
+                        'source': group_data['source'],
+                        'type': group_data['type'],
+                        'chunk_count': len(group_data['documents'])
+                    }
+                    
+                except Exception as e:
+                    logger.error(f"Erreur création segment pour {doc_id}: {str(e)}")
+        
+        return document_segments
+    
+    def _get_embeddings_instance(self, embedding_model: str):
+        """Obtient une instance des embeddings pour la segmentation"""
+        try:
+            model_config = EMBEDDING_MODELS.get(embedding_model)
+            if not model_config:
+                return None
+            
+            # Vérifier si une clé API est requise
+            if model_config["requires_api_key"]:
+                if embedding_model == "OpenAI":
+                    api_key = os.getenv("OPENAI_API_KEY")
+                    if not api_key:
+                        return None
+            
+            # Créer l'objet embeddings
+            embedding_class = model_config["class"]
+            params = model_config["params"].copy()
+            
+            embeddings = embedding_class(**params)
+            return embeddings
+            
+        except Exception as e:
+            logger.error(f"Erreur création embeddings pour segmentation: {str(e)}")
+            return None
+    
     def load_vectorstore(self, vectorstore_id: str, embeddings) -> Optional[FAISS]:
-        """Charge un vector store depuis le répertoire"""
+        """Charge un vector store complet depuis le répertoire"""
         try:
             vectorstore_path = self.get_vectorstore_path(vectorstore_id)
             
@@ -315,6 +363,56 @@ class VectorStoreManager:
             logger.error(f"Erreur chargement vector store {vectorstore_id}: {str(e)}")
             return None
     
+    def load_document_segment(self, vectorstore_id: str, doc_id: str, embeddings) -> Optional[FAISS]:
+        """Charge un segment spécifique d'un vector store"""
+        try:
+            vectorstore_path = self.get_vectorstore_path(vectorstore_id)
+            segment_path = vectorstore_path / "segments" / doc_id
+            
+            if not segment_path.exists() or not (segment_path / "index.faiss").exists():
+                logger.warning(f"Segment {doc_id} n'existe pas dans {vectorstore_id}")
+                return None
+            
+            # Charger le segment
+            segment_vectorstore = FAISS.load_local(
+                str(segment_path), 
+                embeddings, 
+                allow_dangerous_deserialization=True
+            )
+            
+            logger.info(f"Segment chargé: {segment_path}")
+            return segment_vectorstore
+            
+        except Exception as e:
+            logger.error(f"Erreur chargement segment {doc_id}: {str(e)}")
+            return None
+    
+    def load_multiple_segments(self, vectorstore_id: str, doc_ids: List[str], embeddings) -> Optional[FAISS]:
+        """Charge et combine plusieurs segments de documents"""
+        try:
+            combined_vectorstore = None
+            loaded_segments = []
+            
+            for doc_id in doc_ids:
+                segment = self.load_document_segment(vectorstore_id, doc_id, embeddings)
+                if segment:
+                    if combined_vectorstore is None:
+                        combined_vectorstore = segment
+                    else:
+                        combined_vectorstore.merge_from(segment)
+                    loaded_segments.append(doc_id)
+            
+            if combined_vectorstore and loaded_segments:
+                logger.info(f"Segments combinés: {', '.join(loaded_segments)}")
+                return combined_vectorstore
+            else:
+                logger.warning("Aucun segment n'a pu être chargé")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Erreur combinaison segments: {str(e)}")
+            return None
+    
     def list_vectorstores(self) -> List[Dict]:
         """Liste tous les vector stores disponibles avec leurs métadonnées"""
         vectorstores = []
@@ -325,10 +423,15 @@ class VectorStoreManager:
                 metadata = self.load_vectorstore_metadata(vectorstore_id)
                 
                 if metadata:
-                    # Ajouter des informations sur la taille de stockage
+                    # Ajouter des informations sur la taille
                     total_size = sum(path.stat().st_size for path in path.rglob('*') if path.is_file())
                     metadata['storage_size_mb'] = round(total_size / (1024 * 1024), 2)
                     metadata['path'] = str(path)
+                    
+                    # Ajouter les segments disponibles
+                    segments = self.get_document_segments(vectorstore_id)
+                    metadata['available_segments'] = segments
+                    
                     vectorstores.append(metadata)
         
         # Trier par date de création (plus récent d'abord)
@@ -434,6 +537,7 @@ class DocumentProcessor:
         try:
             pdf_reader = PdfReader(pdf_file)
             full_text = ""
+            doc_id = f"pdf_{hashlib.md5(f'{pdf_file.name}_{datetime.now().isoformat()}'.encode()).hexdigest()[:12]}"
             
             for page_num, page in enumerate(pdf_reader.pages):
                 page_text = page.extract_text()
@@ -445,16 +549,28 @@ class DocumentProcessor:
                         source=pdf_file.name,
                         doc_type="pdf",
                         size=len(page_text),
-                        additional_info={'page_number': page_num + 1}
+                        additional_info={
+                            'page_number': page_num + 1,
+                            'doc_id': doc_id  # Même doc_id pour toutes les pages
+                        }
                     )
-                    
-                    # Enregistrer dans le registre
-                    self.register_document(metadata, page_text)
+                    metadata['doc_id'] = doc_id  # Forcer le même doc_id
                     
                     documents.append(LangchainDocument(
                         page_content=page_text,
                         metadata=metadata
                     ))
+            
+            # Enregistrer le document complet dans le registre
+            if full_text.strip():
+                complete_metadata = self.create_metadata(
+                    source=pdf_file.name,
+                    doc_type="pdf",
+                    size=len(full_text),
+                    additional_info={'total_pages': len(pdf_reader.pages)}
+                )
+                complete_metadata['doc_id'] = doc_id
+                self.register_document(complete_metadata, full_text)
             
             self.stats['file_types']['pdf'] = self.stats['file_types'].get('pdf', 0) + 1
             logger.info(f"PDF traité avec succès: {pdf_file.name} ({len(documents)} pages)")
@@ -478,12 +594,15 @@ class DocumentProcessor:
                 text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
             
             if text.strip():
+                doc_id = f"docx_{hashlib.md5(f'{docx_file.name}_{datetime.now().isoformat()}'.encode()).hexdigest()[:12]}"
+                
                 metadata = self.create_metadata(
                     source=docx_file.name,
                     doc_type="docx",
                     size=len(text),
                     additional_info={'word_count': len(text.split())}
                 )
+                metadata['doc_id'] = doc_id
                 
                 # Enregistrer dans le registre
                 self.register_document(metadata, text)
@@ -510,6 +629,8 @@ class DocumentProcessor:
             # Déterminer le moteur selon l'extension
             engine = 'openpyxl' if excel_file.name.endswith('.xlsx') else 'xlrd'
             df_dict = pd.read_excel(excel_file, sheet_name=None, engine=engine)
+            
+            doc_id = f"excel_{hashlib.md5(f'{excel_file.name}_{datetime.now().isoformat()}'.encode()).hexdigest()[:12]}"
             
             for sheet_name, df in df_dict.items():
                 if not df.empty:
@@ -542,14 +663,24 @@ class DocumentProcessor:
                             'columns': len(df.columns)
                         }
                     )
-                    
-                    # Enregistrer dans le registre
-                    self.register_document(metadata, text_content)
+                    metadata['doc_id'] = doc_id  # Même doc_id pour toutes les feuilles
                     
                     documents.append(LangchainDocument(
                         page_content=text_content,
                         metadata=metadata
                     ))
+            
+            # Enregistrer le document complet dans le registre
+            if documents:
+                complete_text = "\n\n".join([doc.page_content for doc in documents])
+                complete_metadata = self.create_metadata(
+                    source=excel_file.name,
+                    doc_type="excel",
+                    size=len(complete_text),
+                    additional_info={'total_sheets': len(df_dict)}
+                )
+                complete_metadata['doc_id'] = doc_id
+                self.register_document(complete_metadata, complete_text)
             
             self.stats['file_types']['excel'] = self.stats['file_types'].get('excel', 0) + 1
             logger.info(f"Excel traité avec succès: {excel_file.name} ({len(documents)} feuilles)")
@@ -572,52 +703,60 @@ class DocumentProcessor:
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
             
-            start_time = time.time()
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             
-            # Parser le contenu
+            # Parser le HTML
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Supprimer les éléments indésirables
-            for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
-                tag.decompose()
+            # Supprimer les scripts et styles
+            for script in soup(["script", "style", "nav", "footer", "header"]):
+                script.decompose()
             
-            # Extraire le titre
+            # Extraire le texte principal
             title = soup.find('title')
             title_text = title.get_text().strip() if title else "Sans titre"
             
-            # Extraire le texte principal
-            text = soup.get_text()
+            # Chercher le contenu principal
+            main_content = soup.find('main') or soup.find('article') or soup.find('div', class_=['content', 'main', 'article'])
+            
+            if main_content:
+                text = main_content.get_text()
+            else:
+                text = soup.get_text()
+            
+            # Nettoyer le texte
             lines = (line.strip() for line in text.splitlines())
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            clean_text = '\n'.join(chunk for chunk in chunks if chunk)
+            text = ' '.join(chunk for chunk in chunks if chunk)
             
-            if clean_text.strip():
-                processing_time = time.time() - start_time
+            if text.strip() and len(text) > 100:  # Ignorer le contenu trop court
+                doc_id = f"url_{hashlib.md5(f'{url}_{datetime.now().isoformat()}'.encode()).hexdigest()[:12]}"
                 
                 metadata = self.create_metadata(
                     source=url,
-                    doc_type="web",
-                    size=len(clean_text),
+                    doc_type="url",
+                    size=len(text),
                     additional_info={
                         'title': title_text,
-                        'status_code': response.status_code,
-                        'processing_time': round(processing_time, 2),
-                        'content_type': response.headers.get('content-type', 'unknown')
+                        'domain': urllib.parse.urlparse(url).netloc,
+                        'scraped_at': datetime.now().isoformat()
                     }
                 )
+                metadata['doc_id'] = doc_id
                 
                 # Enregistrer dans le registre
-                self.register_document(metadata, clean_text)
+                self.register_document(metadata, text)
                 
                 documents.append(LangchainDocument(
-                    page_content=clean_text,
+                    page_content=text,
                     metadata=metadata
                 ))
                 
-                self.stats['file_types']['web'] = self.stats['file_types'].get('web', 0) + 1
-                logger.info(f"URL traitée avec succès: {url} ({len(clean_text)} caractères)")
+                self.stats['file_types']['url'] = self.stats['file_types'].get('url', 0) + 1
+                logger.info(f"URL traitée avec succès: {url}")
+            else:
+                raise ValueError("Contenu trop court ou vide")
                 
         except Exception as e:
             error_msg = f"Erreur URL {url}: {str(e)}"
@@ -626,360 +765,563 @@ class DocumentProcessor:
             
         return documents
     
-    def is_valid_url(self, url: str) -> bool:
-        """Valide une URL"""
+    def process_text(self, text_content: str, source_name: str = "Texte personnalisé") -> List[LangchainDocument]:
+        """Traite du texte brut avec métadonnées"""
+        documents = []
         try:
-            parsed = urllib.parse.urlparse(url)
-            return all([parsed.scheme, parsed.netloc])
-        except:
+            if text_content.strip():
+                doc_id = f"text_{hashlib.md5(f'{source_name}_{datetime.now().isoformat()}'.encode()).hexdigest()[:12]}"
+                
+                metadata = self.create_metadata(
+                    source=source_name,
+                    doc_type="text",
+                    size=len(text_content),
+                    additional_info={
+                        'word_count': len(text_content.split()),
+                        'line_count': len(text_content.splitlines())
+                    }
+                )
+                metadata['doc_id'] = doc_id
+                
+                # Enregistrer dans le registre
+                self.register_document(metadata, text_content)
+                
+                documents.append(LangchainDocument(
+                    page_content=text_content,
+                    metadata=metadata
+                ))
+                
+                self.stats['file_types']['text'] = self.stats['file_types'].get('text', 0) + 1
+                logger.info(f"Texte traité avec succès: {source_name}")
+                
+        except Exception as e:
+            error_msg = f"Erreur texte {source_name}: {str(e)}"
+            self.errors.append(error_msg)
+            logger.error(error_msg)
+            
+        return documents
+    
+    def is_valid_url(self, url: str) -> bool:
+        """Vérifie si une URL est valide"""
+        try:
+            result = urllib.parse.urlparse(url)
+            return all([result.scheme, result.netloc])
+        except Exception:
             return False
     
-    def process_all_sources(self, uploaded_files: List = None, urls: List[str] = None) -> List[LangchainDocument]:
-        """Traite toutes les sources avec gestion d'erreurs et statistiques"""
-        start_time = time.time()
+    def process_files(self, files) -> List[LangchainDocument]:
+        """Traite une liste de fichiers uploadés"""
         all_documents = []
+        start_time = time.time()
         
-        self.stats['total_docs'] = len(uploaded_files or []) + len(urls or [])
-        
-        # Traiter les fichiers uploadés
-        if uploaded_files:
-            for file in uploaded_files:
+        if files:
+            self.stats['total_docs'] = len(files)
+            
+            for file in files:
                 try:
-                    if file.type == "application/pdf":
+                    file_extension = file.name.lower().split('.')[-1]
+                    
+                    if file_extension == 'pdf':
                         docs = self.process_pdf(file)
-                    elif file.type in ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                                      "application/msword"]:
+                    elif file_extension in ['docx', 'doc']:
                         docs = self.process_docx(file)
-                    elif file.type in ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                      "application/vnd.ms-excel"]:
+                    elif file_extension in ['xlsx', 'xls']:
                         docs = self.process_excel(file)
                     else:
-                        continue
+                        # Traiter comme texte
+                        try:
+                            content = file.read().decode('utf-8')
+                            docs = self.process_text(content, file.name)
+                        except UnicodeDecodeError:
+                            # Essayer avec d'autres encodages
+                            file.seek(0)
+                            try:
+                                content = file.read().decode('latin-1')
+                                docs = self.process_text(content, file.name)
+                            except Exception:
+                                docs = []
+                                self.errors.append(f"Impossible de décoder le fichier: {file.name}")
                     
-                    all_documents.extend(docs)
                     if docs:
+                        all_documents.extend(docs)
                         self.stats['successful_docs'] += 1
                     else:
                         self.stats['failed_docs'] += 1
                         
                 except Exception as e:
                     self.stats['failed_docs'] += 1
-                    logger.error(f"Erreur traitement fichier {file.name}: {str(e)}")
+                    error_msg = f"Erreur traitement {file.name}: {str(e)}"
+                    self.errors.append(error_msg)
+                    logger.error(error_msg)
         
-        # Traiter les URLs
-        if urls:
-            for url in urls:
-                try:
-                    docs = self.process_url(url)
-                    all_documents.extend(docs)
-                    if docs:
-                        self.stats['successful_docs'] += 1
-                    else:
-                        self.stats['failed_docs'] += 1
-                        
-                except Exception as e:
-                    self.stats['failed_docs'] += 1
-                    logger.error(f"Erreur traitement URL {url}: {str(e)}")
-        
-        self.stats['processing_time'] = round(time.time() - start_time, 2)
+        self.stats['processing_time'] = time.time() - start_time
         self.processed_docs = all_documents
         
-        logger.info(f"Traitement terminé: {self.stats['successful_docs']}/{self.stats['total_docs']} sources traitées")
         return all_documents
+    
+    def get_statistics(self) -> Dict:
+        """Retourne les statistiques de traitement"""
+        return self.stats.copy()
+    
+    def get_errors(self) -> List[str]:
+        """Retourne la liste des erreurs"""
+        return self.errors.copy()
+    
+    def get_document_info(self, doc_id: str) -> Optional[Dict]:
+        """Récupère les informations d'un document par son ID"""
+        return self.document_registry.get(doc_id)
+    
+    def list_processed_documents(self) -> List[Dict]:
+        """Liste tous les documents traités avec leurs métadonnées"""
+        docs_info = []
+        for doc_id, doc_info in self.document_registry.items():
+            metadata = doc_info['metadata'].copy()
+            metadata['content_preview'] = doc_info['content'][:200] + "..." if len(doc_info['content']) > 200 else doc_info['content']
+            docs_info.append(metadata)
+        
+        return docs_info
+
+def get_embeddings(embedding_model: str):
+    """Crée l'objet embeddings selon le modèle sélectionné"""
+    try:
+        model_config = EMBEDDING_MODELS.get(embedding_model)
+        if not model_config:
+            st.error(f"Modèle d'embedding non supporté: {embedding_model}")
+            return None
+        
+        # Vérifier si une clé API est requise
+        if model_config["requires_api_key"]:
+            if embedding_model == "OpenAI":
+                api_key = os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    st.error("Clé API OpenAI manquante dans les variables d'environnement")
+                    return None
+        
+        # Créer l'objet embeddings
+        embedding_class = model_config["class"]
+        params = model_config["params"].copy()
+        
+        with st.spinner(f"Initialisation du modèle d'embedding {embedding_model}..."):
+            embeddings = embedding_class(**params)
+        
+        return embeddings
+        
+    except Exception as e:
+        st.error(f"Erreur lors de la création des embeddings {embedding_model}: {str(e)}")
+        logger.error(f"Erreur embeddings {embedding_model}: {str(e)}")
+        return None
 
 def get_text_chunks(documents: List[LangchainDocument], chunk_size: int = 1000, 
                    chunk_overlap: int = 200) -> List[LangchainDocument]:
-    """Divise les documents en chunks avec préservation des métadonnées"""
+    """Divise les documents en chunks avec métadonnées préservées"""
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         length_function=len,
-        separators=["\n\n", "\n", " ", ""]
+        separators=["\n\n", "\n", ". ", " ", ""]
     )
     
     all_chunks = []
     for doc in documents:
-        try:
-            # Diviser le document en chunks
-            doc_chunks = text_splitter.split_text(doc.page_content)
+        # Diviser le document en chunks
+        chunks = text_splitter.split_text(doc.page_content)
+        
+        # Créer des documents LangChain avec métadonnées préservées
+        for i, chunk_text in enumerate(chunks):
+            # Copier les métadonnées originales
+            chunk_metadata = doc.metadata.copy()
             
-            # Créer des documents LangChain avec métadonnées enrichies
-            for i, chunk_text in enumerate(doc_chunks):
-                # Copier les métadonnées originales
-                chunk_metadata = doc.metadata.copy()
-                
-                # Ajouter des informations sur le chunk
-                chunk_metadata.update({
-                    'chunk_index': i,
-                    'total_chunks': len(doc_chunks),
-                    'chunk_size': len(chunk_text),
-                    'chunk_id': f"{doc.metadata.get('doc_id', 'unknown')}_{i}"
-                })
-                
-                all_chunks.append(LangchainDocument(
-                    page_content=chunk_text,
-                    metadata=chunk_metadata
-                ))
-                
-        except Exception as e:
-            logger.error(f"Erreur division en chunks pour {doc.metadata.get('source', 'unknown')}: {str(e)}")
+            # Ajouter des informations sur le chunk
+            chunk_metadata.update({
+                'chunk_index': i,
+                'chunk_id': f"{chunk_metadata.get('doc_id', 'unknown')}_{i}",
+                'chunk_size': len(chunk_text),
+                'total_chunks': len(chunks)
+            })
+            
+            chunk_doc = LangchainDocument(
+                page_content=chunk_text,
+                metadata=chunk_metadata
+            )
+            all_chunks.append(chunk_doc)
     
     logger.info(f"Documents divisés en {len(all_chunks)} chunks")
     return all_chunks
 
-def get_embeddings(model_name: str):
-    """Crée une instance d'embeddings selon le modèle choisi"""
+def create_vectorstore(text_chunks: List[LangchainDocument], embeddings, 
+                      vs_manager: SegmentedVectorStoreManager,
+                      embedding_model: str, chunk_params: Dict,
+                      custom_name: str = None) -> Tuple[Optional[FAISS], Optional[str]]:
+    """Crée et sauvegarde un vector store avec gestion de la segmentation"""
     try:
-        model_config = EMBEDDING_MODELS.get(model_name)
-        if not model_config:
-            raise ValueError(f"Modèle d'embedding non supporté: {model_name}")
+        if not text_chunks:
+            st.error("Aucun chunk de texte disponible pour créer le vector store")
+            return None, None
         
-        # Vérifier la clé API si nécessaire
-        if model_config.get("requires_api_key", False):
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                raise ValueError("Clé API OpenAI non trouvée dans les variables d'environnement")
+        # Générer un ID unique pour ce vector store
+        vectorstore_id = vs_manager.generate_vectorstore_id(
+            text_chunks, embedding_model, chunk_params
+        )
         
-        # Créer l'instance d'embeddings
-        embeddings = model_config["class"](**model_config["params"])
-        
-        logger.info(f"Modèle d'embedding initialisé: {model_config['display_name']}")
-        return embeddings
-        
-    except Exception as e:
-        logger.error(f"Erreur initialisation embeddings {model_name}: {str(e)}")
-        raise
-
-def get_vectorstore(text_chunks: List[LangchainDocument], embeddings, 
-                   vs_manager: VectorStoreManager, embedding_model: str,
-                   chunk_params: Dict, llm_model: str = None, 
-                   custom_name: str = None) -> Tuple[FAISS, str]:
-    """Crée ou charge un vector store FAISS avec gestion de cache"""
-    try:
-        # Générer l'ID du vector store
-        vectorstore_id = vs_manager.generate_vectorstore_id(text_chunks, embedding_model, chunk_params)
-        
-        # Essayer de charger depuis le cache
+        # Vérifier si ce vector store existe déjà
         if vs_manager.vectorstore_exists(vectorstore_id):
-            logger.info(f"Chargement du vector store depuis le cache: {vectorstore_id}")
+            st.info("Un vector store identique existe déjà, chargement...")
             vectorstore = vs_manager.load_vectorstore(vectorstore_id, embeddings)
-            if vectorstore:
-                return vectorstore, vectorstore_id
+            return vectorstore, vectorstore_id
         
-        # Créer un nouveau vector store
-        logger.info(f"Création d'un nouveau vector store: {vectorstore_id}")
-        with st.spinner("Création du vector store..."):
+        # Créer le vector store
+        with st.spinner("Création du vector store en cours..."):
             vectorstore = FAISS.from_documents(text_chunks, embeddings)
         
-        # Sauvegarder
-        vs_manager.save_vectorstore(
+        # Sauvegarder avec segmentation
+        success = vs_manager.save_segmented_vectorstore(
             vectorstore, vectorstore_id, text_chunks, 
-            embedding_model, chunk_params, llm_model, custom_name
+            embedding_model, chunk_params, custom_name
         )
         
-        return vectorstore, vectorstore_id
-        
+        if success:
+            st.success(f"Vector store créé et sauvegardé: {vectorstore_id}")
+            return vectorstore, vectorstore_id
+        else:
+            st.warning("Vector store créé mais non sauvegardé")
+            return vectorstore, vectorstore_id
+            
     except Exception as e:
+        st.error(f"Erreur lors de la création du vector store: {str(e)}")
         logger.error(f"Erreur création vector store: {str(e)}")
-        raise
+        return None, None
 
-def get_conversation_chain(vectorstore: FAISS, llm_model: str):
-    """Crée une chaîne de conversation avec le vector store"""
+def get_llm(model_name: str, temperature: float = 0.3):
+    """Crée l'instance du modèle LLM"""
     try:
-        model_config = LLM_MODELS.get(llm_model)
+        model_config = LLM_MODELS.get(model_name)
         if not model_config:
-            raise ValueError(f"Modèle LLM non supporté: {llm_model}")
+            st.error(f"Modèle LLM non supporté: {model_name}")
+            return None
         
-        # Vérifier la clé API
         api_key = os.getenv(model_config["api_key_env"])
         if not api_key:
-            raise ValueError(f"Clé API {model_config['api_key_env']} non trouvée")
+            st.error(f"Clé API manquante pour {model_name}: {model_config['api_key_env']}")
+            return None
         
-        # Créer le modèle LLM
         llm = ChatGoogleGenerativeAI(
             model=model_config["model_name"],
-            google_api_key=api_key,
-            temperature=0.1,
-            convert_system_message_to_human=True
+            temperature=temperature,
+            google_api_key=api_key
         )
         
-        # Créer la mémoire de conversation
+        return llm
+        
+    except Exception as e:
+        st.error(f"Erreur lors de la création du LLM {model_name}: {str(e)}")
+        logger.error(f"Erreur LLM {model_name}: {str(e)}")
+        return None
+
+def get_conversation_chain(vectorstore, llm):
+    """Crée la chaîne de conversation avec mémoire"""
+    try:
         memory = ConversationBufferMemory(
             memory_key='chat_history',
             return_messages=True,
             output_key='answer'
         )
         
-        # Créer la chaîne de conversation
         conversation_chain = ConversationalRetrievalChain.from_llm(
             llm=llm,
             retriever=vectorstore.as_retriever(
                 search_type="similarity",
-                search_kwargs={"k": 5}
+                search_kwargs={"k": 6}
             ),
             memory=memory,
             return_source_documents=True,
             verbose=True
         )
         
-        logger.info(f"Chaîne de conversation créée avec {model_config['display_name']}")
         return conversation_chain
         
     except Exception as e:
-        logger.error(f"Erreur création chaîne de conversation: {str(e)}")
-        raise
-
-def handle_userinput(user_question: str):
-    """Gère la question de l'utilisateur et affiche la réponse"""
-    if st.session_state.conversation is None:
-        st.error("Veuillez d'abord traiter vos documents.")
-        return
-    
-    try:
-        with st.spinner("Génération de la réponse..."):
-            response = st.session_state.conversation({'question': user_question})
-        
-        # Mettre à jour l'historique des messages
-        if 'chat_history' not in st.session_state:
-            st.session_state.chat_history = []
-        
-        st.session_state.chat_history.append({
-            'question': user_question,
-            'answer': response['answer'],
-            'source_documents': response.get('source_documents', []),
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        # Afficher l'historique
-        display_chat_history()
-        
-    except Exception as e:
-        st.error(f"Erreur lors du traitement de la question: {str(e)}")
-        logger.error(f"Erreur handle_userinput: {str(e)}")
+        st.error(f"Erreur lors de la création de la chaîne de conversation: {str(e)}")
+        logger.error(f"Erreur conversation chain: {str(e)}")
+        return None
+def handle_user_input(user_question):
+    """Gère les questions de l'utilisateur et affiche les réponses"""
+    if user_question and st.session_state.conversation:
+        try:
+            with st.spinner("Génération de la réponse..."):
+                # Utiliser la clé 'question' pour ConversationalRetrievalChain
+                response = st.session_state.conversation({
+                    "question": user_question
+                })
+                
+                # Extraire la réponse et les documents sources
+                answer = response.get('answer', 'Désolé, je n\'ai pas pu générer une réponse.')
+                source_documents = response.get('source_documents', [])
+                
+                # Sauvegarder dans l'historique
+                if 'chat_history' not in st.session_state:
+                    st.session_state.chat_history = []
+                
+                st.session_state.chat_history.append({
+                    'question': user_question,
+                    'answer': answer,
+                    'sources': source_documents,
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+        except Exception as e:
+            st.error(f"Erreur lors du traitement de la question: {str(e)}")
+            logger.error(f"Erreur handle_user_input: {str(e)}")
 
 def display_chat_history():
     """Affiche l'historique des conversations"""
-    if 'chat_history' not in st.session_state or not st.session_state.chat_history:
-        return
-    
-    # Utiliser un timestamp pour rendre les clés uniques
-    current_time = datetime.now().timestamp()
-    
-    for i, chat in enumerate(reversed(st.session_state.chat_history)):
-        # Question de l'utilisateur
-        st.write(user_template.replace("{{MSG}}", chat['question']), unsafe_allow_html=True)
+    if 'chat_history' in st.session_state and st.session_state.chat_history:
+        st.subheader("💬 Historique des conversations")
         
-        # Réponse du bot
-        st.write(bot_template.replace("{{MSG}}", chat['answer']), unsafe_allow_html=True)
-        
-        # Sources (dans un expander)
-        if chat.get('source_documents'):
-            with st.expander(f"📚 Sources pour la question {len(st.session_state.chat_history) - i}", expanded=False):
-                for j, doc in enumerate(chat['source_documents']):
-                    source = doc.metadata.get('source', 'Source inconnue')
-                    doc_type = doc.metadata.get('type', 'unknown')
-                    
-                    # Informations contextuelles selon le type
-                    context_info = ""
-                    if doc_type == 'pdf' and 'page_number' in doc.metadata:
-                        context_info = f" (Page {doc.metadata['page_number']})"
-                    elif doc_type == 'excel' and 'sheet_name' in doc.metadata:
-                        context_info = f" (Feuille: {doc.metadata['sheet_name']})"
-                    elif doc_type == 'web' and 'title' in doc.metadata:
-                        context_info = f" ({doc.metadata['title']})"
-                    
-                    st.write(f"**Source {j+1}:** {source}{context_info}")
-                    
-                    # Générer une clé unique pour chaque text_area
-                    unique_key = f"source_{current_time}_{i}_{j}"
-                    
-                    # Afficher un extrait du contenu
-                    content_preview = doc.page_content[:300] + "..." if len(doc.page_content) > 300 else doc.page_content
-                    st.text_area(
-                        f"Extrait {j+1}:", 
-                        content_preview, 
-                        height=100, 
-                        key=unique_key,
-                        disabled=True
-                    )
+        for i, exchange in enumerate(reversed(st.session_state.chat_history)):
+            with st.container():
+                # Question de l'utilisateur
+                st.write(user_template.replace("{{MSG}}", exchange['question']), 
+                        unsafe_allow_html=True)
+                
+                # Réponse du bot
+                st.write(bot_template.replace("{{MSG}}", exchange['answer']), 
+                        unsafe_allow_html=True)
+                
+                # Sources utilisées
+                if exchange.get('sources'):
+                    with st.expander(f"📚 Sources utilisées ({len(exchange['sources'])})"):
+                        for j, doc in enumerate(exchange['sources']):
+                            source = doc.metadata.get('source', 'Source inconnue')
+                            doc_type = doc.metadata.get('type', 'unknown')
+                            chunk_info = doc.metadata.get('chunk_index', 'N/A')
+                            
+                            st.write(f"**Source {j+1}:** {source} ({doc_type})")
+                            if chunk_info != 'N/A':
+                                st.write(f"*Chunk {chunk_info}*")
+                            
+                            # Afficher un extrait du contenu
+                            content_preview = doc.page_content[:300]
+                            if len(doc.page_content) > 300:
+                                content_preview += "..."
+                            st.write(f"```\n{content_preview}\n```")
+                            st.write("---")
+                
+                st.write("---")
 
-def display_vectorstore_info(vs_manager: VectorStoreManager, vectorstore_id: str = None):
-    """Affiche les informations détaillées sur le vector store"""
-    if not vectorstore_id:
-        return
+def display_vectorstore_manager():
+    """Affiche le gestionnaire de vector stores"""
+    st.subheader("🗂️ Gestionnaire de Vector Stores")
     
-    metadata = vs_manager.load_vectorstore_metadata(vectorstore_id)
-    if not metadata:
-        return
+    # Initialiser le gestionnaire si nécessaire
+    if 'vs_manager' not in st.session_state:
+        st.session_state.vs_manager = SegmentedVectorStoreManager()
     
-    with st.expander("📊 Informations sur le Vector Store", expanded=False):
+    vs_manager = st.session_state.vs_manager
+    
+    # Onglets pour les différentes fonctions
+    tab1, tab2, tab3 = st.tabs(["📋 Vector Stores", "🔍 Segments", "🗑️ Gestion"])
+    
+    with tab1:
+        # Liste des vector stores disponibles
+        vectorstores = vs_manager.list_vectorstores()
+        
+        if vectorstores:
+            st.write(f"**{len(vectorstores)} vector store(s) disponible(s):**")
+            
+            for vs in vectorstores:
+                with st.expander(f"📁 {vs.get('custom_name', vs['vectorstore_id'])} - {vs.get('storage_size_mb', 0):.1f} MB"):
+                    col1, col2 = st.columns([2, 1])
+                    
+                    with col1:
+                        st.write(f"**ID:** {vs['vectorstore_id']}")
+                        st.write(f"**Créé le:** {vs.get('created_at', 'N/A')}")
+                        st.write(f"**Modèle d'embedding:** {vs.get('embedding_model', 'N/A')}")
+                        st.write(f"**Documents:** {vs.get('document_count', 0)}")
+                        st.write(f"**Vecteurs:** {vs.get('vector_count', 0)}")
+                        st.write(f"**Segments:** {len(vs.get('available_segments', []))}")
+                        
+                        # Informations sur les documents
+                        if vs.get('documents_info'):
+                            st.write("**Sources:**")
+                            for doc_info in vs['documents_info']:
+                                st.write(f"- {doc_info['source']} ({doc_info['type']}) - {doc_info['chunks']} chunks")
+                    
+                    with col2:
+                        # Bouton pour charger ce vector store
+                        if st.button(f"📥 Charger", key=f"load_{vs['vectorstore_id']}"):
+                            try:
+                                # Récupérer le modèle d'embedding utilisé
+                                embedding_model = vs.get('embedding_model', 'HuggingFace Sentence Transformers')
+                                embeddings = get_embeddings(embedding_model)
+                                
+                                if embeddings:
+                                    loaded_vs = vs_manager.load_vectorstore(vs['vectorstore_id'], embeddings)
+                                    if loaded_vs:
+                                        st.session_state.vectorstore = loaded_vs
+                                        st.session_state.current_vectorstore_id = vs['vectorstore_id']
+                                        st.success(f"Vector store chargé: {vs.get('custom_name', vs['vectorstore_id'])}")
+                                        st.rerun()
+                                    else:
+                                        st.error("Erreur lors du chargement du vector store")
+                                else:
+                                    st.error("Impossible de créer les embeddings")
+                            except Exception as e:
+                                st.error(f"Erreur: {str(e)}")
+        else:
+            st.info("Aucun vector store disponible. Créez-en un en traitant des documents.")
+    
+    with tab2:
+        # Gestion des segments
+        if 'current_vectorstore_id' in st.session_state:
+            current_vs_id = st.session_state.current_vectorstore_id
+            segments = vs_manager.get_document_segments(current_vs_id)
+            
+            if segments:
+                st.write(f"**Segments disponibles pour le vector store actuel:**")
+                
+                selected_segments = []
+                for segment in segments:
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        is_selected = st.checkbox(
+                            f"📄 {segment['source']} ({segment['type']}) - {segment['chunk_count']} chunks",
+                            key=f"segment_{segment['doc_id']}"
+                        )
+                        if is_selected:
+                            selected_segments.append(segment['doc_id'])
+                    
+                    with col2:
+                        st.write(f"{segment['vector_count']} vecteurs")
+                
+                # Bouton pour charger les segments sélectionnés
+                if selected_segments:
+                    if st.button("🔄 Charger segments sélectionnés"):
+                        try:
+                            metadata = vs_manager.load_vectorstore_metadata(current_vs_id)
+                            embedding_model = metadata.get('embedding_model', 'HuggingFace Sentence Transformers')
+                            embeddings = get_embeddings(embedding_model)
+                            if embeddings:
+                                combined_vs = vs_manager.load_multiple_segments(
+                                    current_vs_id, selected_segments, embeddings
+                                )
+                                if combined_vs:
+                                    st.session_state.vectorstore = combined_vs
+                                    st.success(f"Segments combinés chargés: {len(selected_segments)} documents")
+                                    # Créer la chaîne de conversation avec le vectorstore des segments
+                                    st.session_state.conversation = get_conversation_chain(combined_vs, get_llm(st.session_state.selected_llm_model))
+                                    st.rerun()
+                                else:
+                                    st.error("Erreur lors du chargement des segments")
+                            else:
+                                st.error("Impossible de créer les embeddings")
+                        except Exception as e:
+                            st.error(f"Erreur: {str(e)}")
+            else:
+                st.info("Aucun segment disponible pour le vector store actuel.")
+        else:
+            st.info("Aucun vector store actuel. Chargez ou créez un vector store d'abord.")
+    
+    with tab3:
+        # Nettoyage et suppression
+        st.write("**🧹 Nettoyage automatique:**")
+        
         col1, col2 = st.columns(2)
-        
         with col1:
-            st.write(f"**Nom:** {metadata.get('custom_name', 'N/A')}")
-            st.write(f"**ID:** {vectorstore_id}")
-            st.write(f"**Créé le:** {metadata.get('created_at', 'N/A')[:16]}")
-            st.write(f"**Modèle d'embedding:** {metadata.get('embedding_model_display', 'N/A')}")
-            st.write(f"**Modèle LLM:** {metadata.get('llm_model_display', 'N/A')}")
-        
+            max_age = st.number_input("Âge max (jours)", min_value=1, max_value=365, value=30)
         with col2:
-            st.write(f"**Nombre de documents:** {metadata.get('document_count', 0)}")
-            st.write(f"**Chunks totaux:** {metadata.get('total_chunks', 0)}")
-            st.write(f"**Vecteurs:** {metadata.get('vector_count', 0)}")
-            st.write(f"**Taille chunk:** {metadata.get('chunk_params', {}).get('chunk_size', 'N/A')}")
-            st.write(f"**Overlap:** {metadata.get('chunk_params', {}).get('chunk_overlap', 'N/A')}")
+            max_count = st.number_input("Nombre max", min_value=1, max_value=100, value=10)
         
-        # Statistiques de traitement
-        processing_stats = metadata.get('processing_stats', {})
-        if processing_stats:
-            st.write("**Statistiques de traitement:**")
-            st.write(f"- Fichiers: {processing_stats.get('total_files', 0)}")
-            st.write(f"- URLs: {processing_stats.get('total_urls', 0)}")
-            st.write(f"- Taille totale: {processing_stats.get('total_size_mb', 0)} MB")
-            st.write(f"- Types: {', '.join(processing_stats.get('file_types', []))}")
+        if st.button("🧹 Nettoyer anciens vector stores"):
+            try:
+                vs_manager.cleanup_old_vectorstores(max_age, max_count)
+                st.success("Nettoyage effectué")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erreur nettoyage: {str(e)}")
         
-        # Détails des fichiers
-        files_info = metadata.get('files_info', [])
-        if files_info:
-            st.write("**Fichiers traités:**")
-            for file_info in files_info:
-                filename = file_info.get('filename', 'N/A')
-                file_type = file_info.get('type', 'unknown')
-                chunks = file_info.get('total_chunks', 0)
-                
-                additional_info = ""
-                if file_type == 'pdf' and 'pages' in file_info:
-                    pages = file_info['pages']
-                    if pages:
-                        additional_info = f" ({len(pages)} pages)"
-                elif file_type == 'excel' and 'sheets' in file_info:
-                    sheets = file_info['sheets']
-                    if sheets:
-                        additional_info = f" ({len(sheets)} feuilles)"
-                elif file_type == 'docx' and 'word_count' in file_info:
-                    word_count = file_info['word_count']
-                    additional_info = f" ({word_count} mots)"
-                
-                st.write(f"- {filename} ({file_type}){additional_info} - {chunks} chunks")
+        st.write("**🗑️ Suppression manuelle:**")
+        vectorstores = vs_manager.list_vectorstores()
         
-        # Détails des URLs
-        urls_info = metadata.get('urls_info', [])
-        if urls_info:
-            st.write("**URLs traitées:**")
-            for url_info in urls_info:
-                url = url_info.get('url', 'N/A')
-                title = url_info.get('title', 'Sans titre')
-                chunks = url_info.get('chunks', 0)
-                status = url_info.get('status_code', 'unknown')
-                
-                st.write(f"- {title} ({status}) - {chunks} chunks")
-                st.write(f"  URL: {url}")
+        if vectorstores:
+            vs_to_delete = st.selectbox(
+                "Sélectionner un vector store à supprimer:",
+                options=[None] + [vs['vectorstore_id'] for vs in vectorstores],
+                format_func=lambda x: "Choisir..." if x is None else next(
+                    (vs.get('custom_name', vs['vectorstore_id']) for vs in vectorstores if vs['vectorstore_id'] == x),
+                    x
+                )
+            )
+            
+            if vs_to_delete:
+                if st.button("🗑️ Supprimer définitivement", type="secondary"):
+                    try:
+                        success = vs_manager.delete_vectorstore(vs_to_delete)
+                        if success:
+                            st.success("Vector store supprimé")
+                            # Nettoyer la session si c'était le vector store actuel
+                            if st.session_state.get('current_vectorstore_id') == vs_to_delete:
+                                if 'vectorstore' in st.session_state:
+                                    del st.session_state.vectorstore
+                                if 'current_vectorstore_id' in st.session_state:
+                                    del st.session_state.current_vectorstore_id
+                            st.rerun()
+                        else:
+                            st.error("Erreur lors de la suppression")
+                    except Exception as e:
+                        st.error(f"Erreur: {str(e)}")
+
+def display_document_processor_stats():
+    """Affiche les statistiques du processeur de documents"""
+    if 'doc_processor' in st.session_state:
+        processor = st.session_state.doc_processor
+        stats = processor.get_statistics()
+        errors = processor.get_errors()
+        
+        if stats['total_docs'] > 0:
+            st.subheader("📊 Statistiques de traitement")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Documents traités", stats['successful_docs'])
+            with col2:
+                st.metric("Échecs", stats['failed_docs'])
+            with col3:
+                st.metric("Temps de traitement", f"{stats['processing_time']:.2f}s")
+            with col4:
+                success_rate = (stats['successful_docs'] / stats['total_docs'] * 100) if stats['total_docs'] > 0 else 0
+                st.metric("Taux de succès", f"{success_rate:.1f}%")
+            
+            # Types de fichiers traités
+            if stats['file_types']:
+                st.write("**Types de fichiers:**")
+                for file_type, count in stats['file_types'].items():
+                    st.write(f"- {file_type.upper()}: {count}")
+            
+            # Erreurs
+            if errors:
+                with st.expander(f"⚠️ Erreurs ({len(errors)})"):
+                    for error in errors:
+                        st.error(error)
+            
+            # Informations sur les documents traités
+            docs_info = processor.list_processed_documents()
+            if docs_info:
+                with st.expander(f"📄 Documents traités ({len(docs_info)})"):
+                    for doc_info in docs_info:
+                        st.write(f"**{doc_info['source']}** ({doc_info['type']})")
+                        st.write(f"- Taille: {doc_info['size']} caractères")
+                        st.write(f"- ID: {doc_info['doc_id']}")
+                        if 'word_count' in doc_info:
+                            st.write(f"- Mots: {doc_info['word_count']}")
+                        st.write(f"- Aperçu: {doc_info.get('content_preview', 'N/A')}")
+                        st.write("---")
 
 def main():
     """Fonction principale de l'application Streamlit"""
     # Configuration de la page
     st.set_page_config(
-        page_title="Chat RAG Avancé",
+        page_title="Chat Multi-Documents avec Vector Stores",
         page_icon="🤖",
         layout="wide",
         initial_sidebar_state="expanded"
@@ -992,13 +1334,14 @@ def main():
     st.write(css, unsafe_allow_html=True)
     
     # Titre principal
-    st.title("🤖 Chat RAG Avancé avec Gestion de Vector Stores")
-    st.markdown("*Analysez vos documents et URLs avec une IA conversationnelle avancée*")
+    st.title("🤖 Chat Multi-Documents avec Vector Stores Segmentés")
+    st.markdown("---")
     
-    # Initialiser les composants
+    # Initialiser le gestionnaire de vector stores
     if 'vs_manager' not in st.session_state:
-        st.session_state.vs_manager = VectorStoreManager()
+        st.session_state.vs_manager = SegmentedVectorStoreManager()
     
+    # Initialiser le processeur de documents
     if 'doc_processor' not in st.session_state:
         st.session_state.doc_processor = DocumentProcessor()
     
@@ -1006,214 +1349,464 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configuration")
         
-        # Configuration des modèles
-        st.subheader("🔧 Modèles")
+        # Section modèles
+        st.subheader("🧠 Modèles")
         
-        selected_embedding = st.selectbox(
-            "Modèle d'embedding",
+        # Sélection du modèle d'embedding
+        embedding_model = st.selectbox(
+            "Modèle d'Embedding:",
             options=list(EMBEDDING_MODELS.keys()),
-            format_func=lambda x: EMBEDDING_MODELS[x]['display_name'],
-            index=2  # Par défaut HuggingFace Sentence Transformers
+            index=2,  # HuggingFace
         )
+        st.session_state.selected_embedding_model = embedding_model
         
-        selected_llm = st.selectbox(
-            "Modèle de langage",
+        # Sélection du modèle LLM
+        llm_model = st.selectbox(
+            "Modèle LLM:",
             options=list(LLM_MODELS.keys()),
-            format_func=lambda x: LLM_MODELS[x]['display_name'],
-            index=0  # Par défaut Gemini 2.0 Flash
+            index=0
         )
+        st.session_state.selected_llm_model = llm_model
         
-        # Configuration du chunking
-        st.subheader("📝 Paramètres de découpage")
-        chunk_size = st.slider("Taille des chunks", 500, 2000, 1000, 100)
-        chunk_overlap = st.slider("Chevauchement", 50, 500, 200, 50)
-        
-        chunk_params = {
-            'chunk_size': chunk_size,
-            'chunk_overlap': chunk_overlap
-        }
-        
-        st.divider()
-        
-        # Gestion des Vector Stores existants
-        st.subheader("💾 Vector Stores Sauvegardés")
-        
-        vectorstores = st.session_state.vs_manager.list_vectorstores()
-        
-        if vectorstores:
-            # Sélection d'un vector store existant
-            vs_options = {f"{vs['custom_name']} ({vs['created_at'][:10]})": vs['vectorstore_id'] 
-                         for vs in vectorstores}
+        # Configuration avancée
+        with st.expander("🔧 Paramètres avancés"):
+            chunk_size = st.slider("Taille des chunks", 500, 2000, 1000, 100)
+            chunk_overlap = st.slider("Chevauchement", 50, 300, 200, 50)
+            k_documents = st.slider("Nombre de documents à récupérer", 1, 10, 4)
+            temperature = st.slider("Température LLM", 0.0, 1.0, 0.3, 0.1)
             
-            selected_vs_name = st.selectbox(
-                "Charger un Vector Store existant",
-                options=[""] + list(vs_options.keys()),
-                format_func=lambda x: "Sélectionner..." if x == "" else x
-            )
-            
-            if selected_vs_name and selected_vs_name != "":
-                selected_vs_id = vs_options[selected_vs_name]
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("🔄 Charger", key="load_vs"):
-                        try:
-                            embeddings = get_embeddings(selected_embedding)
-                            vectorstore = st.session_state.vs_manager.load_vectorstore(selected_vs_id, embeddings)
-                            
-                            if vectorstore:
-                                st.session_state.conversation = get_conversation_chain(vectorstore, selected_llm)
-                                st.session_state.current_vs_id = selected_vs_id
-                                st.success("Vector Store chargé avec succès!")
-                                st.rerun()
-                            else:
-                                st.error("Erreur lors du chargement")
-                                
-                        except Exception as e:
-                            st.error(f"Erreur: {str(e)}")
-                
-                with col2:
-                    if st.button("🗑️ Supprimer", key="delete_vs"):
-                        if st.session_state.vs_manager.delete_vectorstore(selected_vs_id):
-                            st.success("Vector Store supprimé!")
-                            st.rerun()
-                        else:
-                            st.error("Erreur lors de la suppression")
-            
-            # Afficher la liste des vector stores
-            with st.expander("📋 Détails des Vector Stores", expanded=False):
-                for vs in vectorstores:
-                    st.write(f"**{vs['custom_name']}**")
-                    st.write(f"- Créé: {vs['created_at'][:16]}")
-                    st.write(f"- Documents: {vs['document_count']}")
-                    st.write(f"- Chunks: {vs.get('total_chunks', 'Non disponible')}")
-
-                    st.write(f"- Taille: {vs.get('storage_size_mb', 0)} MB")
-                    st.write("---")
+            st.session_state.chunk_size = chunk_size
+            st.session_state.chunk_overlap = chunk_overlap
+            st.session_state.k_documents = k_documents
+            st.session_state.temperature = temperature
+        
+        # Informations sur le vector store actuel
+        if 'current_vectorstore_id' in st.session_state:
+            st.success(f"✅ Vector store actuel: {st.session_state.current_vectorstore_id[:8]}...")
+            if st.button("🔄 Recharger conversation"):
+                create_conversation_chain()
         else:
-            st.info("Aucun Vector Store sauvegardé")
+            st.info("ℹ️ Aucun vector store chargé")
         
-        # Nettoyage automatique
-        if st.button("🧹 Nettoyer les anciens VS"):
-            st.session_state.vs_manager.cleanup_old_vectorstores(max_age_days=7, max_count=5)
-            st.success("Nettoyage effectué!")
+        # Bouton pour effacer l'historique
+        if st.button("🗑️ Effacer l'historique"):
+            if 'chat_history' in st.session_state:
+                st.session_state.chat_history = []
+            st.success("Historique effacé")
             st.rerun()
     
-    # Zone principale
-    col1, col2 = st.columns([2, 1])
+    # Interface principale avec onglets
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "💬 Chat", 
+        "📁 Documents", 
+        "🗂️ Vector Stores", 
+        "📊 Statistiques"
+    ])
     
-    with col1:
+    with tab1:
         # Interface de chat
-        st.subheader("💬 Conversation")
-        
-        # Afficher l'état actuel
-        if 'conversation' in st.session_state and st.session_state.conversation:
-            if 'current_vs_id' in st.session_state:
-                display_vectorstore_info(st.session_state.vs_manager, st.session_state.current_vs_id)
-            
-            st.success("✅ Prêt pour les questions!")
-            
-            # Zone de saisie de question
-            user_question = st.text_input("Posez votre question:", key="user_question")
-            
-            if user_question:
-                handle_userinput(user_question)
-        else:
-            st.info("Veuillez charger un Vector Store existant ou traiter de nouveaux documents.")
-        
-        # Affichage de l'historique des conversations
-        if 'chat_history' in st.session_state and st.session_state.chat_history:
-            st.divider()
-            display_chat_history()
+        st.subheader("💬 Conversation avec vos documents")
+        user_question = st.text_input(
+            "Posez votre question:",
+            placeholder="Que voulez-vous savoir sur vos documents ?",
+            key="user_input"
+        )
+        send_button = st.button("📤 Envoyer", type="primary")
+
+        # Seul le bouton déclenche la génération
+        if send_button and user_question:
+            if 'vectorstore' not in st.session_state:
+                st.warning("⚠️ Veuillez d'abord charger ou créer un vector store.")
+            else:
+                if 'conversation' not in st.session_state:
+                    create_conversation_chain()
+                handle_user_input(user_question)
+                # Optionnel : st.session_state.user_input = "" (mais évite st.rerun ici)
+        display_chat_history()
     
-    with col2:
-        # Interface de traitement des documents
-        st.subheader("📄 Traitement des Documents")
+    with tab2:
+        # Interface de gestion des documents
+        st.subheader("📁 Traitement des documents")
         
         # Upload de fichiers
         uploaded_files = st.file_uploader(
             "Choisissez vos fichiers",
+            type=['pdf', 'txt', 'docx', 'xlsx', 'csv', 'pptx'],
             accept_multiple_files=True,
-            type=['pdf', 'docx', 'doc', 'xlsx', 'xls']
+            help="Formats supportés: PDF, TXT, DOCX, XLSX, CSV, PPTX"
         )
         
-        # Saisie d'URLs
-        st.subheader("🌐 URLs à traiter")
-        urls_text = st.text_area(
-            "URLs (une par ligne)",
-            height=100,
-            placeholder="https://example.com\nhttps://autre-site.com"
-        )
+        # Options de traitement
+        col1, col2 = st.columns(2)
+        with col1:
+            custom_name = st.text_input(
+                "Nom personnalisé du vector store:",
+                placeholder="Optionnel - sera généré automatiquement si vide"
+            )
         
-        urls = [url.strip() for url in urls_text.split('\n') if url.strip()]
-        
-        # Nom personnalisé pour le vector store
-        custom_vs_name = st.text_input(
-            "Nom du Vector Store (optionnel)",
-            placeholder="MonAnalyse_2024"
-        )
+        with col2:
+            processing_mode = st.selectbox(
+                "Mode de traitement:",
+                options=[
+                    "Nouveau vector store",
+                    "Ajouter au vector store actuel"
+                ]
+            )
         
         # Bouton de traitement
-        if st.button("🚀 Traiter et Créer Vector Store", type="primary"):
-            if not uploaded_files and not urls:
-                st.error("Veuillez fournir au moins un fichier ou une URL.")
+        if st.button("🚀 Traiter les documents", type="primary"):
+            if not uploaded_files:
+                st.warning("⚠️ Veuillez sélectionner au moins un fichier.")
             else:
                 try:
-                    with st.spinner("Traitement en cours..."):
-                        # Reset du processor
-                        st.session_state.doc_processor.reset()
+                    with st.spinner("Traitement des documents en cours..."):
+                        # Obtenir les embeddings
+                        embeddings = get_embeddings(st.session_state.selected_embedding_model)
+                        if not embeddings:
+                            st.error("Impossible de créer les embeddings")
+                            return
                         
-                        # Traitement des documents
-                        documents = st.session_state.doc_processor.process_all_sources(
-                            uploaded_files=uploaded_files,
-                            urls=urls
+                        # Configuration du processeur
+                        processor = st.session_state.doc_processor
+                        processor.configure(
+                            chunk_size=st.session_state.get('chunk_size', 1000),
+                            chunk_overlap=st.session_state.get('chunk_overlap', 200)
                         )
+                        
+                        # Traitement des fichiers
+                        documents = processor.process_files(uploaded_files)
                         
                         if not documents:
                             st.error("Aucun document n'a pu être traité.")
-                        else:
-                            # Affichage des statistiques
-                            stats = st.session_state.doc_processor.stats
-                            st.success(f"✅ {stats['successful_docs']}/{stats['total_docs']} sources traitées")
-                            
-                            if st.session_state.doc_processor.errors:
-                                with st.expander("⚠️ Erreurs de traitement", expanded=False):
-                                    for error in st.session_state.doc_processor.errors:
-                                        st.error(error)
-                            
-                            # Initialiser les embeddings avant de les utiliser
-                            embeddings = get_embeddings(selected_embedding)
-                            
-                            # Division en chunks
-                            text_chunks = get_text_chunks(documents, chunk_size, chunk_overlap)
-                            vectorstore, vs_id = get_vectorstore(
-                                text_chunks, embeddings, st.session_state.vs_manager,
-                                selected_embedding, chunk_params, selected_llm, custom_vs_name
+                            return
+                        
+                        # Gestion du vector store
+                        vs_manager = st.session_state.vs_manager
+                        
+                        if processing_mode == "Nouveau vector store":
+                            # Créer un nouveau vector store
+                            vectorstore_id = vs_manager.create_vectorstore(
+                                documents=documents,
+                                embeddings=embeddings,
+                                custom_name=custom_name or None,
+                                embedding_model=st.session_state.selected_embedding_model
                             )
                             
-                            # Création de la chaîne de conversation
-                            st.session_state.conversation = get_conversation_chain(vectorstore, selected_llm)
-                            st.session_state.current_vs_id = vs_id
+                            if vectorstore_id:
+                                # Charger le nouveau vector store
+                                vectorstore = vs_manager.load_vectorstore(vectorstore_id, embeddings)
+                                if vectorstore:
+                                    st.session_state.vectorstore = vectorstore
+                                    st.session_state.current_vectorstore_id = vectorstore_id
+                                    st.success(f"✅ Nouveau vector store créé et chargé: {vectorstore_id}")
+                                else:
+                                    st.error("Vector store créé mais impossible à charger")
+                            else:
+                                st.error("Erreur lors de la création du vector store")
+                        
+                        else:  # Ajouter au vector store actuel
+                            if 'current_vectorstore_id' not in st.session_state:
+                                st.error("Aucun vector store actuel pour ajouter les documents")
+                                return
                             
-                            st.success("🎉 Vector Store créé et prêt pour les questions!")
-                            st.rerun()
-        
+                            current_vs_id = st.session_state.current_vectorstore_id
+                            success = vs_manager.add_documents_to_vectorstore(
+                                vectorstore_id=current_vs_id,
+                                documents=documents,
+                                embeddings=embeddings
+                            )
+                            
+                            if success:
+                                # Recharger le vector store mis à jour
+                                vectorstore = vs_manager.load_vectorstore(current_vs_id, embeddings)
+                                if vectorstore:
+                                    st.session_state.vectorstore = vectorstore
+                                    st.success("✅ Documents ajoutés au vector store actuel")
+                                else:
+                                    st.error("Documents ajoutés mais impossible de recharger le vector store")
+                            else:
+                                st.error("Erreur lors de l'ajout des documents")
+                        
+                        # Recréer la chaîne de conversation
+                        create_conversation_chain()
+                        
+                        st.rerun()
+                
                 except Exception as e:
                     st.error(f"Erreur lors du traitement: {str(e)}")
-                    logger.error(f"Erreur main processing: {str(e)}")
+                    logger.error(f"Erreur traitement documents: {str(e)}")
         
-        # Informations sur les fichiers uploadés
-        if uploaded_files:
-            with st.expander("📁 Fichiers sélectionnés", expanded=True):
-                for file in uploaded_files:
-                    file_size = len(file.getvalue()) / (1024 * 1024)  # MB
-                    st.write(f"• {file.name} ({file.type}) - {file_size:.2f} MB")
+        # Affichage des statistiques de traitement
+        display_document_processor_stats()
+    
+    with tab3:
+        # Gestionnaire de vector stores
+        display_vectorstore_manager()
+    
+    with tab4:
+        # Statistiques et informations
+        st.subheader("📊 Statistiques globales")
         
-        # Informations sur les URLs
-        if urls:
-            with st.expander("🔗 URLs sélectionnées", expanded=True):
-                for url in urls:
-                    st.write(f"• {url}")
+        # Informations sur le système
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**🔧 Configuration actuelle:**")
+            st.write(f"- Modèle d'embedding: {st.session_state.get('selected_embedding_model', 'Non défini')}")
+            st.write(f"- Modèle LLM: {st.session_state.get('selected_llm_model', 'Non défini')}")
+            st.write(f"- Taille des chunks: {st.session_state.get('chunk_size', 1000)}")
+            st.write(f"- Chevauchement: {st.session_state.get('chunk_overlap', 200)}")
+            st.write(f"- Documents récupérés: {st.session_state.get('k_documents', 4)}")
+            st.write(f"- Température: {st.session_state.get('temperature', 0.3)}")
+        
+        with col2:
+            st.write("**📈 Statistiques de session:**")
+            chat_count = len(st.session_state.get('chat_history', []))
+            st.write(f"- Messages échangés: {chat_count}")
+            
+            if 'vectorstore' in st.session_state and hasattr(st.session_state.vectorstore, 'index'):
+                try:
+                    vector_count = st.session_state.vectorstore.index.ntotal
+                    st.write(f"- Vecteurs dans le store: {vector_count}")
+                except:
+                    st.write("- Vecteurs dans le store: N/A")
+            
+            if 'vs_manager' in st.session_state:
+                vs_count = len(st.session_state.vs_manager.list_vectorstores())
+                st.write(f"- Vector stores disponibles: {vs_count}")
+        
+        # Informations détaillées sur le vector store actuel
+        if 'current_vectorstore_id' in st.session_state:
+            st.write("**🗂️ Vector store actuel:**")
+            current_vs_id = st.session_state.current_vectorstore_id
+            vs_manager = st.session_state.vs_manager
+            
+            try:
+                metadata = vs_manager.load_vectorstore_metadata(current_vs_id)
+                if metadata:
+                    st.write(f"- ID: {current_vs_id}")
+                    st.write(f"- Nom: {metadata.get('custom_name', 'N/A')}")
+                    st.write(f"- Créé le: {metadata.get('created_at', 'N/A')}")
+                    st.write(f"- Taille: {metadata.get('storage_size_mb', 0):.2f} MB")
+                    st.write(f"- Documents: {metadata.get('document_count', 0)}")
+                    
+                    # Graphique des types de documents
+                    if metadata.get('documents_info'):
+                        doc_types = {}
+                        for doc_info in metadata['documents_info']:
+                            doc_type = doc_info['type']
+                            doc_types[doc_type] = doc_types.get(doc_type, 0) + 1
+                        
+                        if doc_types:
+                            st.write("**📊 Répartition par type:**")
+                            for doc_type, count in doc_types.items():
+                                percentage = (count / len(metadata['documents_info'])) * 100
+                                st.write(f"- {doc_type.upper()}: {count} ({percentage:.1f}%)")
+            except Exception as e:
+                st.error(f"Erreur lors de la récupération des métadonnées: {str(e)}")
+        
+        # Actions de maintenance
+        st.subheader("🔧 Maintenance")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("🧹 Nettoyer les caches"):
+                # Nettoyer les caches internes si disponibles
+                try:
+                    if 'doc_processor' in st.session_state:
+                        st.session_state.doc_processor = DocumentProcessor()
+                    st.success("Caches nettoyés")
+                except Exception as e:
+                    st.error(f"Erreur: {str(e)}")
+        
+        with col2:
+            if st.button("🔄 Réinitialiser session"):
+                # Conserver seulement les éléments essentiels
+                keys_to_keep = ['vs_manager']
+                session_backup = {k: v for k, v in st.session_state.items() if k in keys_to_keep}
+                st.session_state.clear()
+                st.session_state.update(session_backup)
+                st.success("Session réinitialisée")
+                st.rerun()
+        
+        with col3:
+            if st.button("📥 Exporter configuration"):
+                config = {
+                    'embedding_model': st.session_state.get('selected_embedding_model'),
+                    'llm_model': st.session_state.get('selected_llm_model'),
+                    'chunk_size': st.session_state.get('chunk_size', 1000),
+                    'chunk_overlap': st.session_state.get('chunk_overlap', 200),
+                    'k_documents': st.session_state.get('k_documents', 4),
+                    'temperature': st.session_state.get('temperature', 0.3)
+                }
+                
+                import json
+                config_json = json.dumps(config, indent=2)
+                
+                
+                st.download_button(
+                    label="📥 Télécharger config.json",
+                    data=config_json,
+                    file_name="chat_config.json",
+                    mime="application/json"
+                )
+
+def create_conversation_chain():
+    """Crée la chaîne de conversation RAG"""
+    if 'vectorstore' not in st.session_state:
+        logger.warning("Aucun vectorstore disponible pour créer la chaîne de conversation")
+        return False
+    
+    try:
+        # Obtenir le modèle LLM
+        llm_model_name = st.session_state.get('selected_llm_model')
+        llm = get_llm(llm_model_name)
+        
+        if not llm:
+            st.error("Impossible de créer le modèle LLM")
+            return False
+            
+        # Créer la mémoire
+        memory = ConversationBufferMemory(
+            memory_key='chat_history',
+            return_messages=True,
+            output_key='answer'
+        )
+        
+        # Créer la chaîne de conversation
+        conversation_chain = ConversationalRetrievalChain.from_llm(
+            llm=llm,
+            retriever=st.session_state.vectorstore.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": st.session_state.get('k_documents', 4)}
+            ),
+            memory=memory,
+            return_source_documents=True,
+            verbose=True
+        )
+        
+        st.session_state.conversation = conversation_chain
+        logger.info("Chaîne de conversation créée avec succès")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Erreur création chaîne conversation: {str(e)}")
+        st.error(f"Erreur lors de la création de la conversation: {str(e)}")
+        return False
+
+# CSS pour l'interface
+css = """
+<style>
+.stTextInput > div > div > input {
+    background-color: #f0f2f6;
+}
+
+.stSelectbox > div > div > select {
+    background-color: #f0f2f6;
+}
+
+.stButton > button {
+    background-color: #0083b8;
+    color: white;
+    border-radius: 5px;
+    border: none;
+    padding: 0.5rem 1rem;
+    font-weight: bold;
+}
+
+.stButton > button:hover {
+    background-color: #006c96;
+}
+
+.chat-message {
+    padding: 1rem;
+    border-radius: 10px;
+    margin: 1rem 0;
+    display: flex;
+    align-items: flex-start;
+}
+
+.chat-message.user {
+    background-color: #dcf8c6;
+    flex-direction: row-reverse;
+}
+
+.chat-message.bot {
+    background-color: #f1f1f1;
+}
+
+.chat-message .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 10px;
+}
+
+.chat-message .message {
+    flex-grow: 1;
+    padding: 0 10px;
+}
+
+.source-doc {
+    background-color: #f8f9fa;
+    border-left: 4px solid #0083b8;
+    padding: 10px;
+    margin: 5px 0;
+    border-radius: 5px;
+}
+
+.metric-container {
+    background-color: #f0f2f6;
+    padding: 1rem;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.error-message {
+    background-color: #ffebee;
+    color: #c62828;
+    padding: 10px;
+    border-radius: 5px;
+    border-left: 4px solid #c62828;
+    margin: 10px 0;
+}
+
+.success-message {
+    background-color: #e8f5e8;
+    color: #2e7d32;
+    padding: 10px;
+    border-radius: 5px;
+    border-left: 4px solid #2e7d32;
+    margin: 10px 0;
+}
+
+.info-message {
+    background-color: #e3f2fd;
+    color: #1565c0;
+    padding: 10px;
+    border-radius: 5px;
+    border-left: 4px solid #1565c0;
+    margin: 10px 0;
+}
+</style>
+"""
+
+# Templates HTML pour les messages
+user_template = """
+<div class="chat-message user">
+    <div class="message">{{MSG}}</div>
+    <div class="avatar">👤</div>
+</div>
+"""
+
+bot_template = """
+<div class="chat-message bot">
+    <div class="avatar">🤖</div>
+    <div class="message">{{MSG}}</div>
+</div>
+"""
 
 if __name__ == "__main__":
     main()
