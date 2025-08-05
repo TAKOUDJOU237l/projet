@@ -1,0 +1,31 @@
+{
+  "vectorstore_id": "ce9e414037b8d6b8",
+  "custom_name": "VS_1docs_20250805_1350",
+  "created_at": "2025-08-05T13:50:51.880888",
+  "embedding_model": "HuggingFace Multilingual",
+  "chunk_params": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+  },
+  "document_count": 3,
+  "vector_count": 3,
+  "has_segments": true,
+  "segments": {
+    "pdf_2c5cd39911ad": {
+      "doc_id": "pdf_2c5cd39911ad",
+      "source": "KENN Manuel.pdf",
+      "type": "pdf",
+      "chunk_count": 3,
+      "vector_count": 3
+    }
+  },
+  "documents_info": [
+    {
+      "source": "KENN Manuel.pdf",
+      "type": "pdf",
+      "doc_id": "pdf_2c5cd39911ad",
+      "chunks": 3,
+      "total_size": 2341
+    }
+  ]
+}

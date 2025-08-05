@@ -490,6 +490,9 @@ class DocumentProcessor:
         }
         # Dictionnaire pour stocker tous les documents par leur ID unique
         self.document_registry = {}
+        
+        self.chunk_size = 1000
+        self.chunk_overlap = 200
     
     def reset(self):
         """Remet à zéro le processor pour traiter de nouveaux documents"""
@@ -503,6 +506,12 @@ class DocumentProcessor:
             'file_types': {}
         }
         self.document_registry = {}
+    
+    def configure(self, chunk_size: int = 1000, chunk_overlap: int = 200):
+        """Configure les paramètres de traitement des documents"""
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        logger.info(f"Configuration mise à jour: chunk_size={chunk_size}, overlap={chunk_overlap}")
     
     def create_metadata(self, source: str, doc_type: str, size: int = 0, 
                        additional_info: Dict = None) -> Dict:
@@ -1484,23 +1493,36 @@ def main():
                         vs_manager = st.session_state.vs_manager
                         
                         if processing_mode == "Nouveau vector store":
-                            # Créer un nouveau vector store
-                            vectorstore_id = vs_manager.create_vectorstore(
-                                documents=documents,
-                                embeddings=embeddings,
-                                custom_name=custom_name or None,
-                                embedding_model=st.session_state.selected_embedding_model
+                            # Créer un nouveau vector store en utilisant les méthodes existantes
+                            chunk_params = {
+                                'chunk_size': st.session_state.get('chunk_size', 1000),
+                                'chunk_overlap': st.session_state.get('chunk_overlap', 200)
+                            }
+                            
+                            # Diviser les documents en chunks
+                            text_chunks = get_text_chunks(
+                                documents,
+                                chunk_size=chunk_params['chunk_size'],
+                                chunk_overlap=chunk_params['chunk_overlap']
                             )
                             
-                            if vectorstore_id:
-                                # Charger le nouveau vector store
-                                vectorstore = vs_manager.load_vectorstore(vectorstore_id, embeddings)
-                                if vectorstore:
-                                    st.session_state.vectorstore = vectorstore
-                                    st.session_state.current_vectorstore_id = vectorstore_id
-                                    st.success(f"✅ Nouveau vector store créé et chargé: {vectorstore_id}")
-                                else:
-                                    st.error("Vector store créé mais impossible à charger")
+                            # Créer et sauvegarder le vector store
+                            vectorstore, vectorstore_id = create_vectorstore(
+                                text_chunks=text_chunks,
+                                embeddings=embeddings,
+                                vs_manager=vs_manager,
+                                embedding_model=st.session_state.selected_embedding_model,
+                                chunk_params=chunk_params,
+                                custom_name=custom_name
+                            )
+                            
+                            if vectorstore and vectorstore_id:
+                                st.session_state.vectorstore = vectorstore
+                                st.session_state.current_vectorstore_id = vectorstore_id
+                                st.success(f"✅ Nouveau vector store créé et chargé: {vectorstore_id}")
+                                
+                                # Créer la chaîne de conversation
+                                create_conversation_chain()
                             else:
                                 st.error("Erreur lors de la création du vector store")
                         
@@ -1548,7 +1570,7 @@ def main():
         st.subheader("📊 Statistiques globales")
         
         # Informations sur le système
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             st.write("**🔧 Configuration actuelle:**")
@@ -1608,27 +1630,14 @@ def main():
         # Actions de maintenance
         st.subheader("🔧 Maintenance")
         
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("🧹 Nettoyer les caches"):
-                # Nettoyer les caches internes si disponibles
-                try:
-                    if 'doc_processor' in st.session_state:
-                        st.session_state.doc_processor = DocumentProcessor()
-                    st.success("Caches nettoyés")
-                except Exception as e:
-                    st.error(f"Erreur: {str(e)}")
-        
-        with col2:
-            if st.button("🔄 Réinitialiser session"):
-                # Conserver seulement les éléments essentiels
-                keys_to_keep = ['vs_manager']
-                session_backup = {k: v for k, v in st.session_state.items() if k in keys_to_keep}
-                st.session_state.clear()
-                st.session_state.update(session_backup)
-                st.success("Session réinitialisée")
-                st.rerun()
+        if st.button("🔄 Réinitialiser session"):
+            # Conserver seulement les éléments essentiels
+            keys_to_keep = ['vs_manager']
+            session_backup = {k: v for k, v in st.session_state.items() if k in keys_to_keep}
+            st.session_state.clear()
+            st.session_state.update(session_backup)
+            st.success("Session réinitialisée")
+            st.rerun()
         
         with col3:
             if st.button("📥 Exporter configuration"):
