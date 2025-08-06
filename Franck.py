@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from langchain.schema import Document as LangchainDocument
+from langchain.prompts import PromptTemplate
 from htmlTemplates import css, bot_template, user_template
 
 import os
@@ -489,6 +490,9 @@ class DocumentProcessor:
         }
         # Dictionnaire pour stocker tous les documents par leur ID unique
         self.document_registry = {}
+        
+        self.chunk_size = 1000
+        self.chunk_overlap = 200
     
     def reset(self):
         """Remet à zéro le processor pour traiter de nouveaux documents"""
@@ -502,6 +506,12 @@ class DocumentProcessor:
             'file_types': {}
         }
         self.document_registry = {}
+    
+    def configure(self, chunk_size: int = 1000, chunk_overlap: int = 200):
+        """Configure les paramètres de traitement des documents"""
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        logger.info(f"Configuration mise à jour: chunk_size={chunk_size}, overlap={chunk_overlap}")
     
     def create_metadata(self, source: str, doc_type: str, size: int = 0, 
                        additional_info: Dict = None) -> Dict:
@@ -1047,14 +1057,16 @@ def handle_user_input(user_question):
     if user_question and st.session_state.conversation:
         try:
             with st.spinner("Génération de la réponse..."):
-                # Obtenir la réponse de la chaîne de conversation
-                response = st.session_state.conversation({'question': user_question})
+                # Utiliser la clé 'question' pour ConversationalRetrievalChain
+                response = st.session_state.conversation({
+                    "question": user_question
+                })
                 
                 # Extraire la réponse et les documents sources
                 answer = response.get('answer', 'Désolé, je n\'ai pas pu générer une réponse.')
                 source_documents = response.get('source_documents', [])
                 
-                # Sauvegarder dans l'historique de la session
+                # Sauvegarder dans l'historique
                 if 'chat_history' not in st.session_state:
                     st.session_state.chat_history = []
                 
@@ -1195,11 +1207,9 @@ def display_vectorstore_manager():
                 if selected_segments:
                     if st.button("🔄 Charger segments sélectionnés"):
                         try:
-                            # Récupérer les métadonnées du vector store
                             metadata = vs_manager.load_vectorstore_metadata(current_vs_id)
                             embedding_model = metadata.get('embedding_model', 'HuggingFace Sentence Transformers')
                             embeddings = get_embeddings(embedding_model)
-                            
                             if embeddings:
                                 combined_vs = vs_manager.load_multiple_segments(
                                     current_vs_id, selected_segments, embeddings
@@ -1207,6 +1217,8 @@ def display_vectorstore_manager():
                                 if combined_vs:
                                     st.session_state.vectorstore = combined_vs
                                     st.success(f"Segments combinés chargés: {len(selected_segments)} documents")
+                                    # Créer la chaîne de conversation avec le vectorstore des segments
+                                    st.session_state.conversation = get_conversation_chain(combined_vs, get_llm(st.session_state.selected_llm_model))
                                     st.rerun()
                                 else:
                                     st.error("Erreur lors du chargement des segments")
@@ -1353,4 +1365,448 @@ def main():
         embedding_model = st.selectbox(
             "Modèle d'Embedding:",
             options=list(EMBEDDING_MODELS.keys()),
-            index=2,  # HuggingFace    
+            index=2,  # HuggingFace
+        )
+        st.session_state.selected_embedding_model = embedding_model
+        
+        # Sélection du modèle LLM
+        llm_model = st.selectbox(
+            "Modèle LLM:",
+            options=list(LLM_MODELS.keys()),
+            index=0
+        )
+        st.session_state.selected_llm_model = llm_model
+        
+        # Configuration avancée
+        with st.expander("🔧 Paramètres avancés"):
+            chunk_size = st.slider("Taille des chunks", 500, 2000, 1000, 100)
+            chunk_overlap = st.slider("Chevauchement", 50, 300, 200, 50)
+            k_documents = st.slider("Nombre de documents à récupérer", 1, 10, 4)
+            temperature = st.slider("Température LLM", 0.0, 1.0, 0.3, 0.1)
+            
+            st.session_state.chunk_size = chunk_size
+            st.session_state.chunk_overlap = chunk_overlap
+            st.session_state.k_documents = k_documents
+            st.session_state.temperature = temperature
+        
+        # Informations sur le vector store actuel
+        if 'current_vectorstore_id' in st.session_state:
+            st.success(f"✅ Vector store actuel: {st.session_state.current_vectorstore_id[:8]}...")
+            if st.button("🔄 Recharger conversation"):
+                create_conversation_chain()
+        else:
+            st.info("ℹ️ Aucun vector store chargé")
+        
+        # Bouton pour effacer l'historique
+        if st.button("🗑️ Effacer l'historique"):
+            if 'chat_history' in st.session_state:
+                st.session_state.chat_history = []
+            st.success("Historique effacé")
+            st.rerun()
+    
+    # Interface principale avec onglets
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "💬 Chat", 
+        "📁 Documents", 
+        "🗂️ Vector Stores", 
+        "📊 Statistiques"
+    ])
+    
+    with tab1:
+        # Interface de chat
+        st.subheader("💬 Conversation avec vos documents")
+        user_question = st.text_input(
+            "Posez votre question:",
+            placeholder="Que voulez-vous savoir sur vos documents ?",
+            key="user_input"
+        )
+        send_button = st.button("📤 Envoyer", type="primary")
+
+        # Seul le bouton déclenche la génération
+        if send_button and user_question:
+            if 'vectorstore' not in st.session_state:
+                st.warning("⚠️ Veuillez d'abord charger ou créer un vector store.")
+            else:
+                if 'conversation' not in st.session_state:
+                    create_conversation_chain()
+                handle_user_input(user_question)
+                # Optionnel : st.session_state.user_input = "" (mais évite st.rerun ici)
+        display_chat_history()
+    
+    with tab2:
+        # Interface de gestion des documents
+        st.subheader("📁 Traitement des documents")
+        
+        # Upload de fichiers
+        uploaded_files = st.file_uploader(
+            "Choisissez vos fichiers",
+            type=['pdf', 'txt', 'docx', 'xlsx', 'csv', 'pptx'],
+            accept_multiple_files=True,
+            help="Formats supportés: PDF, TXT, DOCX, XLSX, CSV, PPTX"
+        )
+        
+        # Ajout du champ pour les URLs
+        urls_input = st.text_area(
+            "URLs à traiter (une par ligne):",
+            placeholder="https://example.com\nhttps://another-site.com",
+            height=100
+        )
+        
+        # Options de traitement
+        col1, col2 = st.columns(2)
+        with col1:
+            custom_name = st.text_input(
+                "Nom personnalisé du vector store:",
+                placeholder="Optionnel - sera généré automatiquement si vide"
+            )
+        
+        with col2:
+            processing_mode = st.selectbox(
+                "Mode de traitement:",
+                options=[
+                    "Nouveau vector store",
+                    "Ajouter au vector store actuel"
+                ]
+            )
+        
+        # Bouton de traitement
+        if st.button("🚀 Traiter les documents", type="primary"):
+            if not uploaded_files and not urls_input.strip():
+                st.warning("⚠️ Veuillez sélectionner au moins un fichier ou entrer une URL.")
+            else:
+                try:
+                    with st.spinner("Traitement en cours..."):
+                        # Obtenir les embeddings
+                        embeddings = get_embeddings(st.session_state.selected_embedding_model)
+                        if not embeddings:
+                            st.error("Impossible de créer les embeddings")
+                            return
+                        
+                        # Traitement des documents
+                        documents = []
+                        
+                        # Traiter les fichiers uploadés
+                        if uploaded_files:
+                            file_docs = st.session_state.doc_processor.process_files(uploaded_files)
+                            documents.extend(file_docs)
+                        
+                        # Traiter les URLs
+                        if urls_input.strip():
+                            urls = [url.strip() for url in urls_input.split('\n') if url.strip()]
+                            for url in urls:
+                                if st.session_state.doc_processor.is_valid_url(url):
+                                    url_docs = st.session_state.doc_processor.process_url(url)
+                                    if url_docs:
+                                        documents.extend(url_docs)
+                                        st.success(f"✅ URL traitée: {url}")
+                                else:
+                                    st.warning(f"⚠️ URL invalide ignorée: {url}")
+                        
+                        if not documents:
+                            st.error("❌ Aucun document n'a pu être traité.")
+                            return
+                        
+                        # Créer ou mettre à jour le vector store
+                        chunk_params = {
+                            'chunk_size': st.session_state.get('chunk_size', 1000),
+                            'chunk_overlap': st.session_state.get('chunk_overlap', 200)
+                        }
+                        
+                        # Diviser les documents en chunks
+                        text_chunks = get_text_chunks(
+                            documents,
+                            chunk_size=chunk_params['chunk_size'],
+                            chunk_overlap=chunk_params['chunk_overlap']
+                        )
+                        
+                        if processing_mode == "Nouveau vector store":
+                            # Créer un nouveau vector store
+                            vectorstore, vectorstore_id = create_vectorstore(
+                                text_chunks=text_chunks,
+                                embeddings=embeddings,
+                                vs_manager=st.session_state.vs_manager,
+                                embedding_model=st.session_state.selected_embedding_model,
+                                chunk_params=chunk_params,
+                                custom_name=custom_name
+                            )
+                            
+                            if vectorstore and vectorstore_id:
+                                st.session_state.vectorstore = vectorstore
+                                st.session_state.current_vectorstore_id = vectorstore_id
+                                st.success(f"✅ Nouveau vector store créé avec les documents et URLs: {vectorstore_id}")
+                                create_conversation_chain()
+                                st.rerun()
+                        else:
+                            # Ajouter au vector store existant
+                            if 'current_vectorstore_id' not in st.session_state:
+                                st.error("❌ Aucun vector store actuel sélectionné")
+                                return
+                            
+                            # ... code pour ajouter au vector store existant ...
+                            st.error("⚠️ Fonctionnalité en cours de développement")
+                        
+                        # Afficher les statistiques
+                        display_document_processor_stats()
+                        
+                except Exception as e:
+                    st.error(f"❌ Erreur lors du traitement: {str(e)}")
+                    logger.error(f"Erreur traitement documents et URLs: {str(e)}")
+    
+    with tab3:
+        # Gestionnaire de vector stores
+        display_vectorstore_manager()
+    
+    with tab4:
+        # Statistiques et informations
+        st.subheader("📊 Statistiques globales")
+        
+        # Informations sur le système
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.write("**🔧 Configuration actuelle:**")
+            st.write(f"- Modèle d'embedding: {st.session_state.get('selected_embedding_model', 'Non défini')}")
+            st.write(f"- Modèle LLM: {st.session_state.get('selected_llm_model', 'Non défini')}")
+            st.write(f"- Taille des chunks: {st.session_state.get('chunk_size', 1000)}")
+            st.write(f"- Chevauchement: {st.session_state.get('chunk_overlap', 200)}")
+            st.write(f"- Documents récupérés: {st.session_state.get('k_documents', 4)}")
+            st.write(f"- Température: {st.session_state.get('temperature', 0.3)}")
+        
+        with col2:
+            st.write("**📈 Statistiques de session:**")
+            chat_count = len(st.session_state.get('chat_history', []))
+            st.write(f"- Messages échangés: {chat_count}")
+            
+            if 'vectorstore' in st.session_state and hasattr(st.session_state.vectorstore, 'index'):
+                try:
+                    vector_count = st.session_state.vectorstore.index.ntotal
+                    st.write(f"- Vecteurs dans le store: {vector_count}")
+                except:
+                    st.write("- Vecteurs dans le store: N/A")
+            
+            if 'vs_manager' in st.session_state:
+                vs_count = len(st.session_state.vs_manager.list_vectorstores())
+                st.write(f"- Vector stores disponibles: {vs_count}")
+        
+        # Informations détaillées sur le vector store actuel
+        if 'current_vectorstore_id' in st.session_state:
+            st.write("**🗂️ Vector store actuel:**")
+            current_vs_id = st.session_state.current_vectorstore_id
+            vs_manager = st.session_state.vs_manager
+            
+            try:
+                metadata = vs_manager.load_vectorstore_metadata(current_vs_id)
+                if metadata:
+                    st.write(f"- ID: {current_vs_id}")
+                    st.write(f"- Nom: {metadata.get('custom_name', 'N/A')}")
+                    st.write(f"- Créé le: {metadata.get('created_at', 'N/A')}")
+                    st.write(f"- Taille: {metadata.get('storage_size_mb', 0):.2f} MB")
+                    st.write(f"- Documents: {metadata.get('document_count', 0)}")
+                    
+                    # Graphique des types de documents
+                    if metadata.get('documents_info'):
+                        doc_types = {}
+                        for doc_info in metadata['documents_info']:
+                            doc_type = doc_info['type']
+                            doc_types[doc_type] = doc_types.get(doc_type, 0) + 1
+                        
+                        if doc_types:
+                            st.write("**📊 Répartition par type:**")
+                            for doc_type, count in doc_types.items():
+                                percentage = (count / len(metadata['documents_info'])) * 100
+                                st.write(f"- {doc_type.upper()}: {count} ({percentage:.1f}%)")
+            except Exception as e:
+                st.error(f"Erreur lors de la récupération des métadonnées: {str(e)}")
+        
+        # Actions de maintenance
+        st.subheader("🔧 Maintenance")
+        
+        if st.button("🔄 Réinitialiser session"):
+            # Conserver seulement les éléments essentiels
+            keys_to_keep = ['vs_manager']
+            session_backup = {k: v for k, v in st.session_state.items() if k in keys_to_keep}
+            st.session_state.clear()
+            st.session_state.update(session_backup)
+            st.success("Session réinitialisée")
+            st.rerun()
+        
+        with col3:
+            if st.button("📥 Exporter configuration"):
+                config = {
+                    'embedding_model': st.session_state.get('selected_embedding_model'),
+                    'llm_model': st.session_state.get('selected_llm_model'),
+                    'chunk_size': st.session_state.get('chunk_size', 1000),
+                    'chunk_overlap': st.session_state.get('chunk_overlap', 200),
+                    'k_documents': st.session_state.get('k_documents', 4),
+                    'temperature': st.session_state.get('temperature', 0.3)
+                }
+                
+                import json
+                config_json = json.dumps(config, indent=2)
+                
+                
+                st.download_button(
+                    label="📥 Télécharger config.json",
+                    data=config_json,
+                    file_name="chat_config.json",
+                    mime="application/json"
+                )
+
+def create_conversation_chain():
+    """Crée la chaîne de conversation RAG"""
+    if 'vectorstore' not in st.session_state:
+        logger.warning("Aucun vectorstore disponible pour créer la chaîne de conversation")
+        return False
+    
+    try:
+        # Obtenir le modèle LLM
+        llm_model_name = st.session_state.get('selected_llm_model')
+        llm = get_llm(llm_model_name)
+        
+        if not llm:
+            st.error("Impossible de créer le modèle LLM")
+            return False
+            
+        # Créer la mémoire
+        memory = ConversationBufferMemory(
+            memory_key='chat_history',
+            return_messages=True,
+            output_key='answer'
+        )
+        
+        # Créer la chaîne de conversation
+        conversation_chain = ConversationalRetrievalChain.from_llm(
+            llm=llm,
+            retriever=st.session_state.vectorstore.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": st.session_state.get('k_documents', 4)}
+            ),
+            memory=memory,
+            return_source_documents=True,
+            verbose=True
+        )
+        
+        st.session_state.conversation = conversation_chain
+        logger.info("Chaîne de conversation créée avec succès")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Erreur création chaîne conversation: {str(e)}")
+        st.error(f"Erreur lors de la création de la conversation: {str(e)}")
+        return False
+
+# CSS pour l'interface
+css = """
+<style>
+.stTextInput > div > div > input {
+    background-color: #f0f2f6;
+}
+
+.stSelectbox > div > div > select {
+    background-color: #f0f2f6;
+}
+
+.stButton > button {
+    background-color: #0083b8;
+    color: white;
+    border-radius: 5px;
+    border: none;
+    padding: 0.5rem 1rem;
+    font-weight: bold;
+}
+
+.stButton > button:hover {
+    background-color: #006c96;
+}
+
+.chat-message {
+    padding: 1rem;
+    border-radius: 10px;
+    margin: 1rem 0;
+    display: flex;
+    align-items: flex-start;
+}
+
+.chat-message.user {
+    background-color: #dcf8c6;
+    flex-direction: row-reverse;
+}
+
+.chat-message.bot {
+    background-color: #f1f1f1;
+}
+
+.chat-message .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 10px;
+}
+
+.chat-message .message {
+    flex-grow: 1;
+    padding: 0 10px;
+}
+
+.source-doc {
+    background-color: #f8f9fa;
+    border-left: 4px solid #0083b8;
+    padding: 10px;
+    margin: 5px 0;
+    border-radius: 5px;
+}
+
+.metric-container {
+    background-color: #f0f2f6;
+    padding: 1rem;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.error-message {
+    background-color: #ffebee;
+    color: #c62828;
+    padding: 10px;
+    border-radius: 5px;
+    border-left: 4px solid #c62828;
+    margin: 10px 0;
+}
+
+.success-message {
+    background-color: #e8f5e8;
+    color: #2e7d32;
+    padding: 10px;
+    border-radius: 5px;
+    border-left: 4px solid #2e7d32;
+    margin: 10px 0;
+}
+
+.info-message {
+    background-color: #e3f2fd;
+    color: #1565c0;
+    padding: 10px;
+    border-radius: 5px;
+    border-left: 4px solid #1565c0;
+    margin: 10px 0;
+}
+</style>
+"""
+
+# Templates HTML pour les messages
+user_template = """
+<div class="chat-message user">
+    <div class="message">{{MSG}}</div>
+    <div class="avatar">👤</div>
+</div>
+"""
+
+bot_template = """
+<div class="chat-message bot">
+    <div class="avatar">🤖</div>
+    <div class="message">{{MSG}}</div>
+</div>
+"""
+
+if __name__ == "__main__":
+    main()

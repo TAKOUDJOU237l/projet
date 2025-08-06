@@ -1,0 +1,59 @@
+{
+  "vectorstore_id": "922cb857da3411e0",
+  "custom_name": "VS_1docs_20250806_1101",
+  "created_at": "2025-08-06T11:01:08.623545",
+  "embedding_model": "HuggingFace Multilingual",
+  "chunk_params": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+  },
+  "document_count": 254,
+  "vector_count": 254,
+  "has_segments": true,
+  "segments": {
+    "pdf_ea224968e5e6": {
+      "doc_id": "pdf_ea224968e5e6",
+      "source": "KENN Manuel.pdf",
+      "type": "pdf",
+      "chunk_count": 3,
+      "vector_count": 3
+    },
+    "pdf_6759e296af09": {
+      "doc_id": "pdf_6759e296af09",
+      "source": "lesystemeeducatifcamerounais.pdf",
+      "type": "pdf",
+      "chunk_count": 10,
+      "vector_count": 10
+    },
+    "url_14d7079fe267": {
+      "doc_id": "url_14d7079fe267",
+      "source": "https://fr.wikipedia.org/wiki/Intelligence_artificielle",
+      "type": "url",
+      "chunk_count": 241,
+      "vector_count": 241
+    }
+  },
+  "documents_info": [
+    {
+      "source": "KENN Manuel.pdf",
+      "type": "pdf",
+      "doc_id": "pdf_ea224968e5e6",
+      "chunks": 3,
+      "total_size": 2341
+    },
+    {
+      "source": "lesystemeeducatifcamerounais.pdf",
+      "type": "pdf",
+      "doc_id": "pdf_6759e296af09",
+      "chunks": 10,
+      "total_size": 8297
+    },
+    {
+      "source": "https://fr.wikipedia.org/wiki/Intelligence_artificielle",
+      "type": "url",
+      "doc_id": "url_14d7079fe267",
+      "chunks": 241,
+      "total_size": 211761
+    }
+  ]
+}
