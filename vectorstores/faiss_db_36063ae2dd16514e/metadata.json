@@ -1,0 +1,101 @@
+{
+  "vectorstore_id": "36063ae2dd16514e",
+  "custom_name": "VS_1docs_20250807_1257",
+  "created_at": "2025-08-07T12:57:00.495257",
+  "embedding_model": "HuggingFace Multilingual",
+  "chunk_params": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+  },
+  "document_count": 812,
+  "vector_count": 812,
+  "has_segments": true,
+  "segments": {
+    "excel_74576d651631": {
+      "doc_id": "excel_74576d651631",
+      "source": "EXOS BASES(1).xls",
+      "type": "excel",
+      "chunk_count": 22,
+      "vector_count": 22
+    },
+    "pdf_36a872585e9b": {
+      "doc_id": "pdf_36a872585e9b",
+      "source": "Fiche TD 1 - Récursivité DS4.docx.pdf",
+      "type": "pdf",
+      "chunk_count": 5,
+      "vector_count": 5
+    },
+    "docx_26cdcecf6af0": {
+      "doc_id": "docx_26cdcecf6af0",
+      "source": "Modèles Transformer et langage IA_.docx",
+      "type": "docx",
+      "chunk_count": 39,
+      "vector_count": 39
+    },
+    "text_d939f21ee39b": {
+      "doc_id": "text_d939f21ee39b",
+      "source": "sales_data_sample.csv",
+      "type": "text",
+      "chunk_count": 679,
+      "vector_count": 679
+    },
+    "url_90f744fad66a": {
+      "doc_id": "url_90f744fad66a",
+      "source": "https://fr.wikipedia.org/wiki/Apprentissage_supervis%C3%A9",
+      "type": "url",
+      "chunk_count": 23,
+      "vector_count": 23
+    },
+    "url_cb3824633879": {
+      "doc_id": "url_cb3824633879",
+      "source": "https://fr.wikipedia.org/wiki/Apprentissage_non_supervis%C3%A9",
+      "type": "url",
+      "chunk_count": 44,
+      "vector_count": 44
+    }
+  },
+  "documents_info": [
+    {
+      "source": "EXOS BASES(1).xls",
+      "type": "excel",
+      "doc_id": "excel_74576d651631",
+      "chunks": 22,
+      "total_size": 12584
+    },
+    {
+      "source": "Fiche TD 1 - Récursivité DS4.docx.pdf",
+      "type": "pdf",
+      "doc_id": "pdf_36a872585e9b",
+      "chunks": 5,
+      "total_size": 4437
+    },
+    {
+      "source": "Modèles Transformer et langage IA_.docx",
+      "type": "docx",
+      "doc_id": "docx_26cdcecf6af0",
+      "chunks": 39,
+      "total_size": 28406
+    },
+    {
+      "source": "sales_data_sample.csv",
+      "type": "text",
+      "doc_id": "text_d939f21ee39b",
+      "chunks": 679,
+      "total_size": 630046
+    },
+    {
+      "source": "https://fr.wikipedia.org/wiki/Apprentissage_supervis%C3%A9",
+      "type": "url",
+      "doc_id": "url_90f744fad66a",
+      "chunks": 23,
+      "total_size": 18189
+    },
+    {
+      "source": "https://fr.wikipedia.org/wiki/Apprentissage_non_supervis%C3%A9",
+      "type": "url",
+      "doc_id": "url_cb3824633879",
+      "chunks": 44,
+      "total_size": 38623
+    }
+  ]
+}

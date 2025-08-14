@@ -834,7 +834,7 @@ class DocumentProcessor:
                         docs = self.process_pdf(file)
                     elif file_extension in ['docx', 'doc']:
                         docs = self.process_docx(file)
-                    elif file_extension in ['xlsx', 'xls']:
+                    elif file_extension in ['xlsx', 'xls']:  # Ajout de 'xls'
                         docs = self.process_excel(file)
                     else:
                         # Traiter comme texte
@@ -862,7 +862,7 @@ class DocumentProcessor:
                     error_msg = f"Erreur traitement {file.name}: {str(e)}"
                     self.errors.append(error_msg)
                     logger.error(error_msg)
-        
+    
         self.stats['processing_time'] = time.time() - start_time
         self.processed_docs = all_documents
         
@@ -1440,9 +1440,9 @@ def main():
         # Upload de fichiers
         uploaded_files = st.file_uploader(
             "Choisissez vos fichiers",
-            type=['pdf', 'txt', 'docx', 'xlsx', 'csv', 'pptx'],
+            type=['pdf', 'txt', 'docx', 'xlsx', 'xls', 'csv', 'pptx'],  # Ajout de 'xls'
             accept_multiple_files=True,
-            help="Formats supportés: PDF, TXT, DOCX, XLSX, CSV, PPTX"
+            help="Formats supportés: PDF, TXT, DOCX, XLSX, XLS, CSV, PPTX"
         )
         
         # Ajout du champ pour les URLs

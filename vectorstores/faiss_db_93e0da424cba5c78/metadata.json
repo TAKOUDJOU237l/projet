@@ -1,0 +1,45 @@
+{
+  "vectorstore_id": "93e0da424cba5c78",
+  "custom_name": "Emile",
+  "created_at": "2025-08-07T13:17:33.893532",
+  "embedding_model": "HuggingFace Multilingual",
+  "chunk_params": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+  },
+  "document_count": 23,
+  "vector_count": 23,
+  "has_segments": true,
+  "segments": {
+    "pdf_f594b785a6ac": {
+      "doc_id": "pdf_f594b785a6ac",
+      "source": "Tutorial2_BasicARProgramming.pdf",
+      "type": "pdf",
+      "chunk_count": 16,
+      "vector_count": 16
+    },
+    "url_01bf2ba3f52a": {
+      "doc_id": "url_01bf2ba3f52a",
+      "source": "https://educam.cm/home",
+      "type": "url",
+      "chunk_count": 7,
+      "vector_count": 7
+    }
+  },
+  "documents_info": [
+    {
+      "source": "Tutorial2_BasicARProgramming.pdf",
+      "type": "pdf",
+      "doc_id": "pdf_f594b785a6ac",
+      "chunks": 16,
+      "total_size": 9644
+    },
+    {
+      "source": "https://educam.cm/home",
+      "type": "url",
+      "doc_id": "url_01bf2ba3f52a",
+      "chunks": 7,
+      "total_size": 5813
+    }
+  ]
+}
