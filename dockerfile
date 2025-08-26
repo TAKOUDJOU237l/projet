@@ -1,0 +1,182 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Upgrade pip
+RUN pip install --upgrade pip
+
+# Copy dependencies and install - use a constraints approach
+COPY requirements.txt .
+
+# Install core packages first to resolve conflicts, then the rest
+RUN pip install --no-cache-dir \
+    langchain \
+    langchain-core \
+    langchain-community \
+    langchain-text-splitters \
+    langchain-google-genai \
+    langchain-mongodb \
+    langsmith
+
+# Now install the rest of the packages with specific versions
+RUN pip install --no-cache-dir \
+    aiohappyeyeballs==2.6.1 \
+    aiohttp==3.12.13 \
+    aiosignal==1.4.0 \
+    altair==4.0.0 \
+    annotated-types==0.7.0 \
+    anyio==3.7.1 \
+    async-timeout==4.0.3 \
+    attrs==25.3.0 \
+    beautifulsoup4==4.13.4 \
+    blinker==1.9.0 \
+    cachetools==5.5.2 \
+    certifi==2025.6.15 \
+    charset-normalizer==3.4.2 \
+    click==8.2.1 \
+    colorama==0.4.6 \
+    contourpy==1.3.2 \
+    cycler==0.12.1 \
+    dataclasses-json==0.5.14 \
+    dnspython==2.7.0 \
+    docx2txt==0.9 \
+    entrypoints==0.4 \
+    et_xmlfile==2.0.0 \
+    exceptiongroup==1.3.0 \
+    faiss-cpu==1.7.4 \
+    filelock==3.18.0 \
+    filetype==1.2.0 \
+    fonttools==4.59.0 \
+    frozenlist==1.7.0 \
+    fsspec==2025.5.1 \
+    gitdb==4.0.12 \
+    GitPython==3.1.44 \
+    google-api-core==2.25.1 \
+    google-api-python-client==2.175.0 \
+    google-auth==2.40.3 \
+    google-auth-httplib2==0.2.0 \
+    google-ai-generativelanguage==0.6.18 \
+    googleapis-common-protos==1.70.0 \
+    greenlet==3.2.3 \
+    grpcio==1.73.1 \
+    grpcio-status==1.62.3 \
+    h11==0.16.0 \
+    httpcore==1.0.9 \
+    httplib2==0.22.0 \
+    httpx==0.28.1 \
+    huggingface-hub==0.14.1 \
+    idna==3.10 \
+    importlib_metadata==8.7.0 \
+    InstructorEmbedding==1.0.1 \
+    Jinja2==3.1.6 \
+    joblib==1.5.1 \
+    jsonpatch==1.33 \
+    jsonpointer==3.0.0 \
+    jsonschema==4.24.0 \
+    jsonschema-specifications==2025.4.1 \
+    kiwisolver==1.4.8 \
+    lark==1.2.2 \
+    lxml==6.0.0 \
+    markdown-it-py==3.0.0 \
+    MarkupSafe==3.0.2 \
+    marshmallow==3.26.1 \
+    matplotlib==3.10.3 \
+    mdurl==0.1.2 \
+    mpmath==1.3.0 \
+    multidict==6.6.3 \
+    mypy_extensions==1.1.0 \
+    networkx==3.4.2 \
+    nltk==3.9.1 \
+    numexpr==2.11.0 \
+    numpy==1.26.4 \
+    openai==0.27.6 \
+    openapi-schema-pydantic==1.2.4 \
+    openpyxl==3.1.5 \
+    orjson==3.10.18 \
+    packaging==23.2 \
+    pandas==2.3.0 \
+    pillow==11.3.0 \
+    propcache==0.3.2 \
+    proto-plus==1.26.1 \
+    protobuf==4.25.8 \
+    pyarrow==20.0.0 \
+    pyasn1==0.6.1 \
+    pyasn1_modules==0.4.2 \
+    pydantic==2.11.7 \
+    pydantic_core==2.33.2 \
+    pydeck==0.9.1 \
+    Pygments==2.19.2 \
+    pymongo==4.13.2 \
+    Pympler==1.1 \
+    pyparsing==3.2.3 \
+    PyPDF2==3.0.1 \
+    python-dateutil==2.9.0.post0 \
+    python-docx==1.2.0 \
+    python-dotenv==1.0.0 \
+    pytz==2025.2 \
+    PyYAML==6.0.2 \
+    referencing==0.36.2 \
+    regex==2024.11.6 \
+    requests==2.32.4 \
+    requests-toolbelt==1.0.0 \
+    rich==14.0.0 \
+    rpds-py==0.26.0 \
+    rsa==4.9.1 \
+    safetensors==0.5.3 \
+    scikit-learn==1.7.0 \
+    scipy==1.15.3 \
+    semver==3.0.4 \
+    sentence-transformers==2.2.2 \
+    sentencepiece==0.2.0 \
+    six==1.17.0 \
+    smmap==5.0.2 \
+    sniffio==1.3.1 \
+    soupsieve==2.7 \
+    SQLAlchemy==2.0.35 \
+    streamlit==1.46.1 \
+    sympy==1.14.0 \
+    tenacity==8.5.0 \
+    threadpoolctl==3.6.0 \
+    tiktoken==0.4.0 \
+    tokenizers==0.13.3 \
+    toml==0.10.2 \
+    toolz==1.0.0 \
+    torch==2.7.1 \
+    torchvision==0.22.1 \
+    tornado==6.5.1 \
+    tqdm==4.67.1 \
+    transformers==4.31.0 \
+    typing-inspect==0.9.0 \
+    typing-inspection==0.4.1 \
+    typing_extensions==4.14.1 \
+    tzdata==2025.2 \
+    tzlocal==5.3.1 \
+    uritemplate==4.2.0 \
+    urllib3==2.5.0 \
+    validators==0.35.0 \
+    watchdog==6.0.0 \
+    xlrd==2.0.2 \
+    yarl==1.20.1 \
+    zipp==3.23.0 \
+    zstandard==0.23.0
+
+# Copy application code
+COPY . .
+
+# Copy the .env file (use a more secure approach for production)
+# Consider using environment variables or secrets management instead
+COPY .env .env
+
+# Streamlit environment variables
+ENV STREAMLIT_SERVER_HEADLESS=true
+ENV STREAMLIT_SERVER_ENABLECORS=false
+
+# Expose Streamlit port
+EXPOSE 8501
+
+# Run the app
+CMD ["streamlit", "run", "Franck.py", "--server.port=8501", "--server.address=0.0.0.0"]
+
+
+#cmd to run container "docker build -t streamlit-app . && docker run -p 8501:8501 streamlit-app"
+# docker run -p 8501:8501 streamlit-app
