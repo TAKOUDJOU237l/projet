@@ -1,0 +1,31 @@
+{
+  "vectorstore_id": "6d97153cafacdb7a",
+  "custom_name": "VS_1docs_20250826_1200",
+  "created_at": "2025-08-26T12:00:51.577873",
+  "embedding_model": "HuggingFace Sentence Transformers",
+  "chunk_params": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+  },
+  "document_count": 1272,
+  "vector_count": 1272,
+  "has_segments": true,
+  "segments": {
+    "pdf_28f81b77dbf6": {
+      "doc_id": "pdf_28f81b77dbf6",
+      "source": "Apprenez a programmer en c.pdf",
+      "type": "pdf",
+      "chunk_count": 1272,
+      "vector_count": 1272
+    }
+  },
+  "documents_info": [
+    {
+      "source": "Apprenez a programmer en c.pdf",
+      "type": "pdf",
+      "doc_id": "pdf_28f81b77dbf6",
+      "chunks": 1272,
+      "total_size": 1056345
+    }
+  ]
+}

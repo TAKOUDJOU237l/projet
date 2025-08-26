@@ -1696,117 +1696,117 @@ def create_conversation_chain():
         return False
 
 # CSS pour l'interface
-css = """
-<style>
-.stTextInput > div > div > input {
-    background-color: #f0f2f6;
-}
+# css = """
+# <style>
+# .stTextInput > div > div > input {
+#     background-color: #f0f2f6;
+# }
 
-.stSelectbox > div > div > select {
-    background-color: #f0f2f6;
-}
+# .stSelectbox > div > div > select {
+#     background-color: #f0f2f6;
+# }
 
-.stButton > button {
-    background-color: #0083b8;
-    color: white;
-    border-radius: 5px;
-    border: none;
-    padding: 0.5rem 1rem;
-    font-weight: bold;
-}
+# .stButton > button {
+#     background-color: #0083b8;
+#     color: white;
+#     border-radius: 5px;
+#     border: none;
+#     padding: 0.5rem 1rem;
+#     font-weight: bold;
+# }
 
-.stButton > button:hover {
-    background-color: #006c96;
-}
+# .stButton > button:hover {
+#     background-color: #006c96;
+# }
 
-.chat-message {
-    padding: 1rem;
-    border-radius: 10px;
-    margin: 1rem 0;
-    display: flex;
-    align-items: flex-start;
-}
+# .chat-message {
+#     padding: 1rem;
+#     border-radius: 10px;
+#     margin: 1rem 0;
+#     display: flex;
+#     align-items: flex-start;
+# }
 
-.chat-message.user {
-    background-color: #dcf8c6;
-    flex-direction: row-reverse;
-}
+# .chat-message.user {
+#     background-color: #dcf8c6;
+#     flex-direction: row-reverse;
+# }
 
-.chat-message.bot {
-    background-color: #f1f1f1;
-}
+# .chat-message.bot {
+#     background-color: #f1f1f1;
+# }
 
-.chat-message .avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    object-fit: cover;
-    margin: 0 10px;
-}
+# .chat-message .avatar {
+#     width: 40px;
+#     height: 40px;
+#     border-radius: 50%;
+#     object-fit: cover;
+#     margin: 0 10px;
+# }
 
-.chat-message .message {
-    flex-grow: 1;
-    padding: 0 10px;
-}
+# .chat-message .message {
+#     flex-grow: 1;
+#     padding: 0 10px;
+# }
 
-.source-doc {
-    background-color: #f8f9fa;
-    border-left: 4px solid #0083b8;
-    padding: 10px;
-    margin: 5px 0;
-    border-radius: 5px;
-}
+# .source-doc {
+#     background-color: #f8f9fa;
+#     border-left: 4px solid #0083b8;
+#     padding: 10px;
+#     margin: 5px 0;
+#     border-radius: 5px;
+# }
 
-.metric-container {
-    background-color: #f0f2f6;
-    padding: 1rem;
-    border-radius: 10px;
-    text-align: center;
-}
+# .metric-container {
+#     background-color: #f0f2f6;
+#     padding: 1rem;
+#     border-radius: 10px;
+#     text-align: center;
+# }
 
-.error-message {
-    background-color: #ffebee;
-    color: #c62828;
-    padding: 10px;
-    border-radius: 5px;
-    border-left: 4px solid #c62828;
-    margin: 10px 0;
-}
+# .error-message {
+#     background-color: #ffebee;
+#     color: #c62828;
+#     padding: 10px;
+#     border-radius: 5px;
+#     border-left: 4px solid #c62828;
+#     margin: 10px 0;
+# }
 
-.success-message {
-    background-color: #e8f5e8;
-    color: #2e7d32;
-    padding: 10px;
-    border-radius: 5px;
-    border-left: 4px solid #2e7d32;
-    margin: 10px 0;
-}
+# .success-message {
+#     background-color: #e8f5e8;
+#     color: #2e7d32;
+#     padding: 10px;
+#     border-radius: 5px;
+#     border-left: 4px solid #2e7d32;
+#     margin: 10px 0;
+# }
 
-.info-message {
-    background-color: #e3f2fd;
-    color: #1565c0;
-    padding: 10px;
-    border-radius: 5px;
-    border-left: 4px solid #1565c0;
-    margin: 10px 0;
-}
-</style>
-"""
+# .info-message {
+#     background-color: #e3f2fd;
+#     color: #1565c0;
+#     padding: 10px;
+#     border-radius: 5px;
+#     border-left: 4px solid #1565c0;
+#     margin: 10px 0;
+# }
+# </style>
+# """
 
 # Templates HTML pour les messages
-user_template = """
-<div class="chat-message user">
-    <div class="message">{{MSG}}</div>
-    <div class="avatar">👤</div>
-</div>
-"""
+# user_template = """
+# <div class="chat-message user">
+#     <div class="message">{{MSG}}</div>
+#     <div class="avatar">👤</div>
+# </div>
+# """
 
-bot_template = """
-<div class="chat-message bot">
-    <div class="avatar">🤖</div>
-    <div class="message">{{MSG}}</div>
-</div>
-"""
+# bot_template = """
+# <div class="chat-message bot">
+#     <div class="avatar">🤖</div>
+#     <div class="message">{{MSG}}</div>
+# </div>
+# """
 
 if __name__ == "__main__":
     main()
